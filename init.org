@@ -1,0 +1,305 @@
+#+title:Yasper's Emacs Init
+#+author: Yasper De Jong
+#+property: header-args:emacs-lisp :tangle init.el
+#+startup: overview
+* Unset Defaults
+Unset a lot of default bindings to make room for our own
+#+begin_src emacs-lisp
+  (let ((keys
+         '("C-@" "C-a" "C-b" "C-d" "C-e" "C-f" "C-k" "C-n" "C-p" "C-r"
+           "C-s" "C-w" "C-x o")))
+    (dolist (key keys)
+      (global-set-key (kbd key) 'ignore)))
+#+end_src
+
+* Custom Variables
+Generally speaking, as many custom variables as possible are defined in =custom.el= as opposed to using =setq= or some equivalent. Since custom variables are written to =init.el= by default, we need to change the =custom= file and load in its values.
+
+#+begin_src emacs-lisp
+  (setq custom-file (concat user-emacs-directory "custom.el"))
+  (load custom-file)
+#+end_src
+
+* Package Management
+Packages are downloaded using the default =package.el=, using =GNU Elpa= and =Melpa= as its sources. Check for packages on launch. (TODO check for packages periodically instead of every launch)
+
+#+begin_src emacs-lisp
+  (require 'package)
+  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+
+  (package-initialize)
+  (unless package-archive-contents
+    (package-refresh-contents))
+#+end_src
+
+* Custom Functions
+A few custom functions for emacs to behave how I want.
+
+** Kill and Copy
+Special copy and kill functions to replace the standard. If nothing is highlighted, copy/kill the whole line, otherwise copy/kill the region.
+
+#+begin_src emacs-lisp
+(defun ysd-kill-region-or-line (&optional beg end)
+  "Kill region if active, otherwise, kill whole line."
+  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+  (if (use-region-p)
+    (kill-region beg end)
+    (kill-whole-line)))
+
+(defun ysd-copy-region-or-line (&optional beg end)
+  "Copy region if active, otherwise, copy whole line."
+  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+  (if (use-region-p) ;; If there is a region
+    (copy-region-as-kill beg end)
+    (copy-region-as-kill (line-beginning-position)
+		    (line-beginning-position 2))))
+#+end_src
+
+** Delete Line
+Kill the whole line that the cursor is on.
+
+#+begin_src emacs-lisp
+  (defun ysd-delete-line (&optional line)
+    "Delete the line that point is currently on."
+    (interactive "d")
+    (delete-region (line-beginning-position) (line-beginning-position 2)))
+#+end_src
+
+** Insert Single Char
+Insert a single char then go back to command mode.
+This is done by entering insert mode and switching back to command mode once a =self-insert= command is called.
+
+This can be changed later to limit the map to only self-insertable chars, but that can be worked out later.
+One possible way to do this might be to remap the self-insert command to a custom ignore instead of ='ignore=, which inserts the character during this command.
+
+
+#+begin_src emacs-lisp
+  (defun ysd-insert-char ()
+    (interactive)
+    (ryo-modal-mode 0)
+    (add-hook 'post-self-insert-hook 'ysd-after-insert-char))
+
+  (defun ysd-after-insert-char ()
+    (ryo-modal-mode 1)
+    (remove-hook 'post-self-insert-hook 'ysd-after-insert-char))
+#+end_src
+
+** Bash Shell
+Create a bash shell in a new buffer, using the WSL bash created in =C:/Windows/System32/bash.exe=
+TODO: Fix the color escape characters, shorten prompt
+
+#+begin_src emacs-lisp
+  (defun bash ()
+    (interactive)
+    (async-shell-command "c:/windows/system32/bash.exe -i"
+                         nil
+                         nil))
+#+end_src
+* RYO Modal
+
+Here is my custom modal configuration, because the default Emacs bindings should never be used by anyone. Initially, I enjoyed the idea of vim bindings, but after trying them and realizing that a large majority of bindings were based on legacy, rather than mnemonics or ergonomics, I decided to create my own.
+
+I decided to use RYO modal, mostly because of how easy it is to define keys and other simple settings, but I may switch to Modalka or another package at a later date.
+
+** Keybindings
+Switching between command and insert modes is done using =C-Space=, and movement is done using =ijkl=, because it feels more natural than vim bindings. Moving between words is done with =uo=, and holding shift during movement commands generally does larger movements.
+
+Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill/copy commands defined above.
+
+#+begin_src emacs-lisp
+  (require 'ryo-modal)
+  (require 'undo-fu)
+  (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore)
+  (global-set-key (kbd "C-SPC") 'ryo-modal-mode)
+  (global-set-key (kbd "C-<tab>") 'other-window)
+  (ryo-modal-keys
+   ("i" previous-line)
+   ("j" backward-char)
+   ("k" next-line)
+   ("l" forward-char)
+   ("u" backward-word)
+   ("o" forward-word)
+   ("I" scroll-down-command)
+   ("K" scroll-up-command)
+   ("J" move-beginning-of-line)
+   ("L" move-end-of-line)
+   ("U" beginning-of-buffer)
+   ("O" end-of-buffer)
+   ("s" save-buffer)
+   ("f" swiper-isearch)
+   ("x" ysd-kill-region-or-line)
+   ("c" ysd-copy-region-or-line)
+   ("y" yank)
+   ("X" ysd-delete-line)
+   ("z" undo-fu-only-undo)
+   ("Z" undo-fu-only-redo)
+   ("w" ysd-insert-char)
+   ("SPC" set-mark-command)
+   ("b" switch-to-buffer)) ;; TODO change once I get a better way to switch buffers
+
+  ;; Non modal keys
+  (global-set-key (kbd "C-y") 'clipboard-yank)
+  (global-set-key (kbd "C-x k") 'kill-current-buffer)
+#+end_src
+
+** Multiple Cursors
+Basic setup for multiple cursors usage.
+
+#+begin_src emacs-lisp
+(global-set-key (kbd "C-c m l") 'mc/mark-next-like-this)
+#+end_src
+
+** Other Settings
+Set the cursor to a bar rather than a block, because Emacs treats the cursor as being "between" two characters in 99% of situations anyway. It must be done using =ryo-modal-cursor-type= because it changing between command/insert mode changes the cursor, so the Emacs default is overwritten every time =C-Space= is pressed.
+
+#+begin_src emacs-lisp
+  (setq-default ryo-modal-cursor-type '(bar . 4))
+#+end_src
+
+Activate command mode by default in all buffers except the minibuffer and excluded modes.
+
+#+begin_src emacs-lisp
+  (setq ryo-excluded-modes
+        '(eshell-mode dired-mode))
+  
+  (define-globalized-minor-mode ryo-modal-global-mode
+    ryo-modal-mode
+    (lambda() (unless (or (minibufferp)
+                          (member major-mode ryo-excluded-modes))
+                (ryo-modal-mode 1))))
+  (ryo-modal-global-mode 1)
+#+end_src
+
+* Ivy Configuration
+Currently fairly barebones, but may be changed once I start using it more for code navigation, etc.
+
+#+begin_src emacs-lisp
+  (require 'ivy)
+  (require 'counsel)
+  (ivy-mode 1)
+  (global-set-key (kbd "M-x") 'counsel-M-x)
+#+end_src
+
+** Movement
+Move in text/between results using =C-ijkl= so navigation in the minibuffer is easy without needing to constantly press =C-Space=.
+
+#+begin_src emacs-lisp
+  (ivy-define-key ivy-minibuffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; Workaround because emacs equates "C-i" == "TAB"
+  (ivy-define-key ivy-minibuffer-map (kbd "C-i") 'ivy-previous-line)
+  (ivy-define-key ivy-minibuffer-map (kbd "C-k") 'ivy-next-line)
+  (ivy-define-key ivy-minibuffer-map (kbd "C-u") 'ivy-beginning-of-buffer)
+  (ivy-define-key ivy-minibuffer-map (kbd "C-o") 'ivy-end-of-buffer)
+
+(ivy-define-key ivy-switch-buffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; "C-i" workaround
+  (ivy-define-key ivy-switch-buffer-map (kbd "C-i") 'ivy-previous-line)
+  (ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
+  (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
+#+end_src
+
+* Development
+I want to make my development environment as universal as possible, using the same tool across the board whenever the possibility arises
+
+** Company
+Use =C-<movement>= to scroll through candidates, rather than the emacs defaults. This also leaves our movement keys free to instantly move the cursor instead of having to escape the candidate list first.
+
+#+begin_src emacs-lisp
+  (require 'company)
+  (define-key company-active-map (kbd "C-k") 'company-select-next-or-abort)
+  (define-key company-active-map (kbd "C-i") 'company-select-previous-or-abort)
+  (add-hook 'c++-mode-hook 'company-mode)
+  (add-hook 'python-mode-hook 'company-mode)
+#+end_src
+
+** Semantic
+I am very open to the possibility of using other solutions such as ggtags or ctags in the future, especially when working on larger codebases. For now, semantic's basic functionalities and the advantages of its code analysis provide the best solution.
+
+#+begin_src emacs-lisp
+  (require 'semantic)
+  (global-semanticdb-minor-mode 1)
+  (global-semantic-idle-scheduler-mode 1)
+  (add-hook 'c++-mode-hook 'semantic-mode)
+  (add-hook 'python-mode-hook 'semantic-mode)
+#+end_src
+
+*** Finding Project Roots
+Semantic should only search through includes and files within the project when used as a backend for Company, so this function looks for =.git= folders, and will consider its parent folder as the root of the project. It is preferable not to use this, as it should be handled directly by project managment systems rather than handwritten by me.
+
+TODO put a function or integrate with EDE/projectile/tagging systems
+#+begin_src emacs-lisp
+  (require 'projectile)
+#+end_src
+
+** Emacs Lisp
+Customizations for working with Emacs Lisp
+
+#+begin_src emacs-lisp
+  (add-hook 'emacs-lisp-mode 'show-paren-mode)
+#+end_src
+* Theme
+I use =doom-vibrant= from =doom-themes=, Cascadia Mono for most of my coding (I dislike ligatures because it misrepresents the length of lines), and Merriweather for Org mode, as well as Source Sans Pro for Org Mode headers.
+
+Note that a lot of faces are defined in =custom.el= instead of here.
+
+#+begin_src emacs-lisp
+  (setq ryo-modal-default-cursor-color "white")
+  (require 'doom-themes)
+  (setq doom-themes-enable-bold t
+        doom-themes-enable-italic t)
+  (load-theme 'doom-vibrant t)
+  (set-frame-font "Cascadia Mono 10" nil t)
+#+end_src
+
+* Org Mode
+Because I use org mode for general notetaking as well as some literate programming, I consider the visual clarity to be extremely important. My theme hides/reduces boilerplate like keywords and emphasis in order to make it visually appealing and comprehensible at a glance. It is partially inspired by the behavior/look that [[https://typora.io/][Typora]] has out of the box, but maintains the outline format.
+
+Again please note that faces are mostly defined in =custom.el=.
+
+#+begin_src emacs-lisp
+  (require 'org)
+  (setq org-startup-indented t)
+  (setq org-hide-emphasis-markers t)
+  (font-lock-add-keywords 'org-mode
+                          '(("^ +\\([-]\\) "
+                             (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•"))))))
+  (ryo-modal-major-mode-keys
+   'org-mode
+   ("J" org-beginning-of-line)
+   ("L" org-end-of-line))
+  
+  (require 'org-bullets)
+  (add-hook 'org-mode-hook (lambda() (org-bullets-mode 1)))
+  (add-hook 'org-mode-hook 'variable-pitch-mode)
+  (add-hook 'org-mode-hook 'visual-line-mode)
+  
+  ;; Org Look
+  (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.05)))
+  (set-fontset-font t 'unicode "Cascadia Mono" nil 'prepend)
+  (set-face-attribute 'org-level-1 nil :weight 'bold)
+  (set-face-attribute 'org-level-2 nil :weight 'bold)
+  (set-face-attribute 'org-level-3 nil :weight 'bold)
+  (set-face-attribute 'org-level-4 nil :weight 'bold)
+#+end_src
+
+* Miscellaneous
+** Fullscreen
+Launch Emacs in fullscreen by default.
+
+#+begin_src emacs-lisp
+  (set-frame-parameter (selected-frame) 'fullscreen 'fullboth)
+  (add-to-list 'default-frame-alist '(fullscreen . fullboth))
+#+end_src
+
+** Minor Settings
+Enable/Disable stuff that's not directly changeable through custom.el
+
+#+begin_src emacs-lisp
+  (setq ring-bell-function 'ignore)
+#+end_src
+
+* Useful Resources
+- [[https://github.com/zzamboni/dot-emacs][zzamboni/dot-emacs]]
+- [[https://lepisma.xyz/2017/10/28/ricing-org-mode/][Ricing Up Org Mode]]
+- [[https://www.youtube.com/playlist?list=PLEoMzSkcN8oPH1au7H6B7bBJ4ZO7BXjSZ][Emacs From Scratch by System Crafters]]
+- [[https://zzamboni.org/post/beautifying-org-mode-in-emacs/][Beautifying Org Mode by zzamboni]]
+- [[http://www.howardism.org/Technical/Emacs/orgmode-wordprocessor.html][Org Mode as a Word Processor]]
+- [[https://ashok-khanna.medium.com/introduction-to-dired-mode-91cecd3a06ff][Intro to Dired Mode]]
