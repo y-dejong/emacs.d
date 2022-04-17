@@ -134,7 +134,6 @@
 (setq doom-themes-enable-bold t
       doom-themes-enable-italic t)
 (load-theme 'doom-vibrant t)
-(set-frame-font "Cascadia Mono 10" nil t)
 
 (require 'org)
 (setq org-startup-indented t)
@@ -159,6 +158,11 @@
 (set-face-attribute 'org-level-2 nil :weight 'bold)
 (set-face-attribute 'org-level-3 nil :weight 'bold)
 (set-face-attribute 'org-level-4 nil :weight 'bold)
+
+(require 'server)
+(unless (server-running-p)
+  (server-start))
+(global-set-key (kbd "C-x C-c") 'save-buffers-kill-emacs)
 
 (set-frame-parameter (selected-frame) 'fullscreen 'fullboth)
 (add-to-list 'default-frame-alist '(fullscreen . fullboth))

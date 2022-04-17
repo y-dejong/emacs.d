@@ -246,7 +246,6 @@ Note that a lot of faces are defined in =custom.el= instead of here.
   (setq doom-themes-enable-bold t
         doom-themes-enable-italic t)
   (load-theme 'doom-vibrant t)
-  (set-frame-font "Cascadia Mono 10" nil t)
 #+end_src
 
 * Org Mode
@@ -278,6 +277,16 @@ Again please note that faces are mostly defined in =custom.el=.
   (set-face-attribute 'org-level-2 nil :weight 'bold)
   (set-face-attribute 'org-level-3 nil :weight 'bold)
   (set-face-attribute 'org-level-4 nil :weight 'bold)
+#+end_src
+
+* Emacs Server
+Run emacs as a server in the background, and make the frame a client that connects to the local server. This allows files opened in file explorers to appear in an existing frame, rather than starting a new emacs window. In the future, I can also start the Emacs daemon on startup so that the startup time of opening the application is reduced. Until then, the binding for closing emacs also shuts down the server, so the server and the frame are tied together.
+
+#+begin_src emacs-lisp
+  (require 'server)
+  (unless (server-running-p)
+    (server-start))
+  (global-set-key (kbd "C-x C-c") 'save-buffers-kill-emacs)
 #+end_src
 
 * Miscellaneous

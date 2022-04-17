@@ -26,6 +26,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(default ((t (:height 100 :foundry "outline" :family "Cascadia Mono"))))
  '(fixed-pitch ((t (:family "Cascadia Mono"))))
  '(org-block ((t (:inherit fixed-pitch))))
  '(org-block-begin-line ((t (:inherit (org-block fixed-pitch) :extend t :foreground "#62686E" :height 0.8))))
