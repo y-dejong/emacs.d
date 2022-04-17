@@ -199,6 +199,14 @@ Move in text/between results using =C-ijkl= so navigation in the minibuffer is e
 * Development
 I want to make my development environment as universal as possible, using the same tool across the board whenever the possibility arises
 
+** Projectile
+Set up project managment through =projectile= and map it to ="p"= in the modal configuration. This may be switched to utilizing =project.el= in the future, but it is fairly barebones in version 27.2, which is what I currently use.
+
+#+begin_src emacs-lisp
+  (require 'projectile)
+  (ryo-modal-key "p" 'projectile-command-map)
+#+end_src
+
 ** Company
 Use =C-<movement>= to scroll through candidates, rather than the emacs defaults. This also leaves our movement keys free to instantly move the cursor instead of having to escape the candidate list first.
 
@@ -225,9 +233,6 @@ I am very open to the possibility of using other solutions such as ggtags or cta
 Semantic should only search through includes and files within the project when used as a backend for Company, so this function looks for =.git= folders, and will consider its parent folder as the root of the project. It is preferable not to use this, as it should be handled directly by project managment systems rather than handwritten by me.
 
 TODO put a function or integrate with EDE/projectile/tagging systems
-#+begin_src emacs-lisp
-  (require 'projectile)
-#+end_src
 
 ** Emacs Lisp
 Customizations for working with Emacs Lisp
@@ -235,6 +240,7 @@ Customizations for working with Emacs Lisp
 #+begin_src emacs-lisp
   (add-hook 'emacs-lisp-mode 'show-paren-mode)
 #+end_src
+
 * Theme
 I use =doom-vibrant= from =doom-themes=, Cascadia Mono for most of my coding (I dislike ligatures because it misrepresents the length of lines), and Merriweather for Org mode, as well as Source Sans Pro for Org Mode headers.
 
