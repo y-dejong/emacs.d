@@ -14,6 +14,7 @@
  '(org-bullets-bullet-list '(" "))
  '(org-bullets-face-name 'fixed-pitch)
  '(org-ellipsis " ▾")
+ '(org-modules nil)
  '(org-special-ctrl-a/e t)
  '(org-startup-truncated nil)
  '(package-selected-packages

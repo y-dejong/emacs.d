@@ -113,6 +113,9 @@
   (ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
   (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
 
+(require 'tramp)
+(require 'dired)
+
 (require 'company)
 (define-key company-active-map (kbd "C-k") 'company-select-next-or-abort)
 (define-key company-active-map (kbd "C-i") 'company-select-previous-or-abort)

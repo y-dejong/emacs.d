@@ -196,6 +196,16 @@ Move in text/between results using =C-ijkl= so navigation in the minibuffer is e
   (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
 #+end_src
 
+* File/Directory Browsing
+TODO: Make dired only show important info, deal with projectile and tramp?
+
+For now, this section just =require='s some packages to frontload processing on emacs load, rather than when certain commands are called
+
+#+begin_src emacs-lisp
+  (require 'tramp)
+  (require 'dired)
+#+end_src
+
 * Development
 I want to make my development environment as universal as possible, using the same tool across the board whenever the possibility arises
 
