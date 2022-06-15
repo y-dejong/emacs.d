@@ -49,11 +49,28 @@
                        nil
                        nil))
 
+(require 'eshell)
+(defun ysd-shell ()
+  "Toggle an Eshell window at the bottom of the screen."
+  (interactive)
+  (cl-assert eshell-buffer-name)
+  (if (string= (buffer-name) eshell-buffer-name)
+    (delete-window)
+    (if-let ((window (get-buffer-window eshell-buffer-name))
+             (default-directory (projectile-project-root)))
+        (select-window window)
+      (-> (get-buffer-create eshell-buffer-name)
+          (display-buffer-in-side-window '(
+                                           (side . bottom)
+                                           (window-height . 16)))
+          (select-window))
+      (unless (derived-mode-p 'eshell-mode)
+        (eshell-mode)))))
+
 (require 'ryo-modal)
 (require 'undo-fu)
 (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore)
 (global-set-key (kbd "C-SPC") 'ryo-modal-mode)
-(global-set-key (kbd "C-<tab>") 'other-window)
 (ryo-modal-keys
  ("i" previous-line)
  ("j" backward-char)
@@ -80,15 +97,18 @@
  ("b" switch-to-buffer)) ;; TODO change once I get a better way to switch buffers
 
 ;; Non modal keys
+(global-set-key (kbd "C-<tab>") 'other-window)
 (global-set-key (kbd "C-y") 'clipboard-yank)
 (global-set-key (kbd "C-x k") 'kill-current-buffer)
+(global-set-key (kbd "C-e") 'treemacs)
+(global-set-key (kbd "C-t") 'ysd-shell)
 
 (global-set-key (kbd "C-c m l") 'mc/mark-next-like-this)
 
 (setq-default ryo-modal-cursor-type '(bar . 4))
 
 (setq ryo-excluded-modes
-      '(eshell-mode dired-mode))
+      '(eshell-mode dired-mode treemacs-mode))
 
 (define-globalized-minor-mode ryo-modal-global-mode
   ryo-modal-mode
@@ -112,6 +132,12 @@
   (ivy-define-key ivy-switch-buffer-map (kbd "C-i") 'ivy-previous-line)
   (ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
   (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
+
+(require 'treemacs)
+(require 'treemacs-projectile)
+(define-key treemacs-mode-map (kbd "i") 'treemacs-previous-line)
+(define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
+(define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
 
 (require 'projectile)
 (ryo-modal-key "p" 'projectile-command-map)
