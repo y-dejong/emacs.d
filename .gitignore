@@ -1,0 +1,12 @@
+*~
+.cache/
+.mc-lists.el
+elpa/
+eshell/
+network-security.data
+projectile-bookmarks.eld
+projectile.cache
+semanticdb/
+server/
+transient/
+url/
