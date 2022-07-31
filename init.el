@@ -139,6 +139,41 @@
 (define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
 (define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
 
+(defun ysd-make-projects-list ()
+  (with-temp-buffer
+    (let (linkspecs)
+      (insert-file-contents treemacs-persist-file)
+      (while (not (or (eq (line-end-position) (point-max))
+                      (eq (line-beginning-position 2) (point-max))))
+        (re-search-forward "^\\*\\*\s" nil 1)
+        (push (buffer-substring (point) (line-end-position)) linkspecs)
+        (re-search-forward "^\s-\spath\s::\s" nil t)
+        (push (buffer-substring (point) (line-end-position)) linkspecs))
+      (reverse linkspecs))))
+
+(defun ysd-startup-screen ()
+  "Display a startup screen with list of projects from treemacs."
+  (let ((splash-buffer (get-buffer-create "*Yasper Emacs*")))
+    (with-current-buffer splash-buffer
+      (let ((inhibit-read-only t)
+            (default-text-properties '(face variable-pitch))
+            (projects (ysd-make-projects-list)))
+        (erase-buffer)
+        (setq default-directory command-line-default-directory)
+        (insert "Welcome to Yasper's Emacs.\n\n")
+        (insert "Open Project:\n")
+        (while projects
+          (insert-button (pop projects)
+                         'face 'link
+                         'action `(lambda (_button) (dired ,(car projects)))
+                         'help-echo (concat "mouse-2, RET: " (pop projects))
+                         'follow-link t)
+          (insert "\n")))
+      (setq buffer-read-only t)
+      (set-buffer-modified-p nil)
+      (beginning-of-buffer))
+    splash-buffer))
+
 (require 'projectile)
 (ryo-modal-key "p" 'projectile-command-map)
 

@@ -6,6 +6,7 @@
  '(column-number-mode t)
  '(company-idle-delay 0.1)
  '(cursor-type '(bar . 4))
+ '(initial-buffer-choice 'ysd-startup-screen)
  '(line-number-mode t)
  '(menu-bar-mode nil)
  '(mouse-wheel-progressive-speed nil)
@@ -17,10 +18,12 @@
  '(org-special-ctrl-a/e t)
  '(org-startup-truncated nil)
  '(package-selected-packages
-   '(multiple-cursors undo-fu projectile magit company yasnippet-snippets yasnippet org doom-themes counsel ivy ryo-modal org-bullets))
+   '(which-key multiple-cursors undo-fu projectile magit company yasnippet-snippets yasnippet org doom-themes counsel ivy ryo-modal org-bullets))
  '(scroll-bar-mode nil)
+ '(show-paren-mode t)
  '(tool-bar-mode nil)
- '(truncate-lines t))
+ '(truncate-lines t)
+ '(which-key-mode t))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
