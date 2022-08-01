@@ -27,7 +27,15 @@
   (if (use-region-p) ;; If there is a region
     (copy-region-as-kill beg end)
     (copy-region-as-kill (line-beginning-position)
-		    (line-beginning-position 2))))
+                    (line-beginning-position 2))))
+
+(defun ysd-yank ()
+  "Yank or cycle through the kill ring."
+  (interactive "*")
+  (if (eq last-command 'yank)
+    (yank-pop)
+    (setq kill-ring-yank-pointer kill-ring)
+    (yank)))
 
 (defun ysd-delete-line (&optional line)
   "Delete the line that point is currently on."
@@ -49,6 +57,14 @@
                        nil
                        nil))
 
+(defun ysd-swiper-isearch (&optional beg end)
+  "swiper-isearch using the current region if non-nil."
+  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+  (if (not (use-region-p))
+    (swiper-isearch)
+    (deactivate-mark)
+    (swiper-isearch (buffer-substring beg end))))
+
 (require 'ryo-modal)
 (require 'undo-fu)
 (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore)
@@ -68,10 +84,10 @@
  ("U" beginning-of-buffer)
  ("O" end-of-buffer)
  ("s" save-buffer)
- ("f" swiper-isearch)
+ ("f" ysd-swiper-isearch)
  ("x" ysd-kill-region-or-line)
  ("c" ysd-copy-region-or-line)
- ("y" yank)
+ ("y" ysd-yank)
  ("X" ysd-delete-line)
  ("z" undo-fu-only-undo)
  ("Z" undo-fu-only-redo)
@@ -101,6 +117,7 @@
 (require 'counsel)
 (ivy-mode 1)
 (global-set-key (kbd "M-x") 'counsel-M-x)
+(global-set-key (kbd "M-y") 'counsel-yank-pop)
 
 (ivy-define-key ivy-minibuffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; Workaround because emacs equates "C-i" == "TAB"
   (ivy-define-key ivy-minibuffer-map (kbd "C-i") 'ivy-previous-line)

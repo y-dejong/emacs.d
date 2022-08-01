@@ -39,20 +39,33 @@ A few custom functions for emacs to behave how I want.
 Special copy and kill functions to replace the standard. If nothing is highlighted, copy/kill the whole line, otherwise copy/kill the region.
 
 #+begin_src emacs-lisp
-(defun ysd-kill-region-or-line (&optional beg end)
-  "Kill region if active, otherwise, kill whole line."
-  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
-  (if (use-region-p)
-    (kill-region beg end)
-    (kill-whole-line)))
+  (defun ysd-kill-region-or-line (&optional beg end)
+    "Kill region if active, otherwise, kill whole line."
+    (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+    (if (use-region-p)
+      (kill-region beg end)
+      (kill-whole-line)))
 
-(defun ysd-copy-region-or-line (&optional beg end)
-  "Copy region if active, otherwise, copy whole line."
-  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
-  (if (use-region-p) ;; If there is a region
-    (copy-region-as-kill beg end)
-    (copy-region-as-kill (line-beginning-position)
-		    (line-beginning-position 2))))
+  (defun ysd-copy-region-or-line (&optional beg end)
+    "Copy region if active, otherwise, copy whole line."
+    (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+    (if (use-region-p) ;; If there is a region
+      (copy-region-as-kill beg end)
+      (copy-region-as-kill (line-beginning-position)
+                      (line-beginning-position 2))))
+#+end_src
+
+** Improved Yank
+Yanking multiple times cycles through the kill ring.
+
+#+begin_src emacs-lisp
+  (defun ysd-yank ()
+    "Yank or cycle through the kill ring."
+    (interactive "*")
+    (if (eq last-command 'yank)
+      (yank-pop)
+      (setq kill-ring-yank-pointer kill-ring)
+      (yank)))
 #+end_src
 
 ** Delete Line
@@ -95,6 +108,20 @@ TODO: Fix the color escape characters, shorten prompt
                          nil
                          nil))
 #+end_src
+
+** Improved Search
+If something is highlighted, use that for the search.
+
+#+begin_src emacs-lisp
+  (defun ysd-swiper-isearch (&optional beg end)
+    "swiper-isearch using the current region if non-nil."
+    (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+    (if (not (use-region-p))
+      (swiper-isearch)
+      (deactivate-mark)
+      (swiper-isearch (buffer-substring beg end))))
+#+end_src
+
 * RYO Modal
 
 Here is my custom modal configuration, because the default Emacs bindings should never be used by anyone. Initially, I enjoyed the idea of vim bindings, but after trying them and realizing that a large majority of bindings were based on legacy, rather than mnemonics or ergonomics, I decided to create my own.
@@ -126,10 +153,10 @@ Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill
    ("U" beginning-of-buffer)
    ("O" end-of-buffer)
    ("s" save-buffer)
-   ("f" swiper-isearch)
+   ("f" ysd-swiper-isearch)
    ("x" ysd-kill-region-or-line)
    ("c" ysd-copy-region-or-line)
-   ("y" yank)
+   ("y" ysd-yank)
    ("X" ysd-delete-line)
    ("z" undo-fu-only-undo)
    ("Z" undo-fu-only-redo)
@@ -178,6 +205,7 @@ Currently fairly barebones, but may be changed once I start using it more for co
   (require 'counsel)
   (ivy-mode 1)
   (global-set-key (kbd "M-x") 'counsel-M-x)
+  (global-set-key (kbd "M-y") 'counsel-yank-pop)
 #+end_src
 
 ** Movement
