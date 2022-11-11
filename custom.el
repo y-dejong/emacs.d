@@ -18,7 +18,7 @@
  '(org-special-ctrl-a/e t)
  '(org-startup-truncated nil)
  '(package-selected-packages
-   '(which-key multiple-cursors undo-fu projectile magit company yasnippet-snippets yasnippet org doom-themes counsel ivy ryo-modal org-bullets))
+   '(all-the-icons-dired which-key multiple-cursors undo-fu projectile magit company yasnippet-snippets yasnippet org doom-themes counsel ivy ryo-modal org-bullets))
  '(scroll-bar-mode nil)
  '(show-paren-mode t)
  '(tool-bar-mode nil)
