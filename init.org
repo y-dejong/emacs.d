@@ -273,6 +273,14 @@ Customizations for working with Emacs Lisp
 #+begin_src emacs-lisp
   (add-hook 'emacs-lisp-mode 'show-paren-mode)
 #+end_src
+* Snippets
+Different snippet systems are designed for different purposes and different levels of robustness, so I have opted to use several snippet engines with mostly nonoverlapping purposes, rather than choosing one to rule them all.
+
+** Abbrev
+#+begin_src emacs-lisp
+(setq abbrev-file-name "~/.emacs.d/abbrev_defs")
+#+end_src
+
 * Theme
 I use =doom-vibrant= from =doom-themes=, Cascadia Mono for most of my coding (I dislike ligatures because it misrepresents the length of lines), and Merriweather for Org mode, as well as Source Sans Pro for Org Mode headers.
 

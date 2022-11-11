@@ -149,6 +149,8 @@
 
 (add-hook 'emacs-lisp-mode 'show-paren-mode)
 
+(setq abbrev-file-name "~/.emacs.d/abbrev_defs")
+
 (setq ryo-modal-default-cursor-color "white")
 (require 'doom-themes)
 (setq doom-themes-enable-bold t
