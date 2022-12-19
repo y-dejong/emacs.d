@@ -1,0 +1,15 @@
+/.mc-lists.el
+abbrev-defs
+/auto-save-list
+/elpa
+eshell/
+semanticdb/
+*.elc
+.cache
+/session.*
+/.session
+transient/
+/custom.el
+*~
+\#*
+.\#*

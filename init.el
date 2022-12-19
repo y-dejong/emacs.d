@@ -229,4 +229,24 @@
 (set-frame-parameter (selected-frame) 'fullscreen 'fullboth)
 (add-to-list 'default-frame-alist '(fullscreen . fullboth))
 
-(setq ring-bell-function 'ignore)
+(setq-default
+ ring-bell-function 'ignore
+ company-idle-delay 0.1
+ cursor-type '(bar . 4)
+ initial-buffer-choice 'ysd-startup-screen
+ line-number-mode t
+ mouse-wheel-progressive-speed nil
+ org-blank-before-new-entry '((heading . t) (plain-list-item))
+ org-bullets-bullet-list '(" ")
+ org-bullets-face-name 'fixed-pitch
+ org-ellipsis " ▾"
+ org-special-ctrl-a/e t
+ show-paren-mode t
+ truncate-lines t
+ which-key-mode t
+ create-lockfiles nil
+ auto-save-default nil
+ make-backup-files nil)
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(scroll-bar-mode -1)

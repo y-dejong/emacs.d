@@ -13,7 +13,8 @@ Unset a lot of default bindings to make room for our own
 #+end_src
 
 * Custom Variables
-Generally speaking, as many custom variables as possible are defined in =custom.el= as opposed to using =setq= or some equivalent. Since custom variables are written to =init.el= by default, we need to change the =custom= file and load in its values.
+Most of my preferred settings are set here using =setq-default=. This allows variables set using =custom= to be machine local, while my preferred settings across all machine are set here.
+ Since custom variables are written to =init.el= by default, we must instead use a separate file for =custom= and load it.
 
 #+begin_src emacs-lisp
   (setq custom-file (concat user-emacs-directory "custom.el"))
@@ -394,11 +395,31 @@ Launch Emacs in fullscreen by default.
   (add-to-list 'default-frame-alist '(fullscreen . fullboth))
 #+end_src
 
-** Minor Settings
-Enable/Disable stuff that's not directly changeable through custom.el
+** Common Sense Settings
+Set some basic common sense settings, which TODO can be overwritten by custom.el
 
 #+begin_src emacs-lisp
-  (setq ring-bell-function 'ignore)
+  (setq-default
+   ring-bell-function 'ignore
+   company-idle-delay 0.1
+   cursor-type '(bar . 4)
+   initial-buffer-choice 'ysd-startup-screen
+   line-number-mode t
+   mouse-wheel-progressive-speed nil
+   org-blank-before-new-entry '((heading . t) (plain-list-item))
+   org-bullets-bullet-list '(" ")
+   org-bullets-face-name 'fixed-pitch
+   org-ellipsis " ▾"
+   org-special-ctrl-a/e t
+   show-paren-mode t
+   truncate-lines t
+   which-key-mode t
+   create-lockfiles nil
+   auto-save-default nil
+   make-backup-files nil)
+  (tool-bar-mode -1)
+  (menu-bar-mode -1)
+  (scroll-bar-mode -1)
 #+end_src
 
 * Useful Resources
