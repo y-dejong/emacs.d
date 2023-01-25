@@ -14,6 +14,7 @@ site-lisp/
 eaf/
 todo.org
 projectile-bookmarks.eld
+custom.el
 *~
 \#*
 .\#*
