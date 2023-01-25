@@ -273,6 +273,15 @@ Move in text/between results using =C-ijkl= so navigation in the minibuffer is e
 
 * File Browsing and Management
 
+** Dired
+Make =dired= prettier, using icons and removing most unnecessary information unless shown manually.
+
+#+begin_src emacs-lisp
+  (when (display-graphic-p)
+    (require 'all-the-icons))
+  (add-hook 'dired-mode-hook 'all-the-icons-dired-mode)
+#+end_src
+
 ** Treemacs
 Use treemacs to display all my projects.
 
@@ -283,7 +292,6 @@ Use treemacs to display all my projects.
   (define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
   (define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
 #+end_src
-
 
 ** Startup Page
 Replace the default Emacs startup page with one more suited to an IDE, providing projects to open and help/info about the setup.

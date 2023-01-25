@@ -174,6 +174,10 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
   (ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
   (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
 
+(when (display-graphic-p)
+  (require 'all-the-icons))
+(add-hook 'dired-mode-hook 'all-the-icons-dired-mode)
+
 (require 'treemacs)
 (require 'treemacs-projectile)
 (define-key treemacs-mode-map (kbd "i") 'treemacs-previous-line)
