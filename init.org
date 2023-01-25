@@ -13,7 +13,8 @@ Unset a lot of default bindings to make room for our own
 #+end_src
 
 * Custom Variables
-Generally speaking, as many custom variables as possible are defined in =custom.el= as opposed to using =setq= or some equivalent. Since custom variables are written to =init.el= by default, we need to change the =custom= file and load in its values.
+Most of my preferred settings are set here using =setq-default=. This allows variables set using =custom= to be machine local, while my preferred settings across all machine are set here.
+ Since custom variables are written to =init.el= by default, we must instead use a separate file for =custom= and load it.
 
 #+begin_src emacs-lisp
   (setq custom-file (concat user-emacs-directory "custom.el"))
@@ -30,6 +31,39 @@ Packages are downloaded using the default =package.el=, using =GNU Elpa= and =Me
   (package-initialize)
   (unless package-archive-contents
     (package-refresh-contents))
+
+  (defvar ysd-needed-packages
+    '(company
+      counsel
+      doom-themes
+      flycheck
+      ivy
+      js2-mode
+      magit
+      multiple-cursors
+      org
+      org-bullets
+      projectile
+      ryo-modal
+      tide
+      treemacs
+      treemacs-projectile
+      undo-fu
+      which-key
+      yasnippet)
+    "Packges that are used by init, and should be installed if not present.")
+
+  (defun require-package (package &optional min-version no-refresh)
+    "Ask elpa to install given PACKAGE with MIN-VERSION.
+  If NO-REFRESH is nil, `package-refresh-contents' is called."
+    (unless (package-installed-p package min-version)
+      (unless (or (assoc package package-archive-contents) no-refresh)
+        (message "Missing package: %s" package)
+        (package-refresh-contents))
+      (package-install package)))
+
+  (dolist (package ysd-needed-packages)
+    (require-package package))
 #+end_src
 
 * Custom Functions
@@ -122,11 +156,36 @@ If something is highlighted, use that for the search.
       (swiper-isearch (buffer-substring beg end))))
 #+end_src
 
+** Popup Shell
+Meant to be bound to a key, toggle popping up and hiding a shell at the bottom of the frame similar to many IDEs and VS Code.
+
+#+begin_src emacs-lisp
+  (require 'eshell)
+  (defun ysd-shell ()
+    "Toggle an Eshell window at the bottom of the screen."
+    (interactive)
+    (cl-assert eshell-buffer-name)
+    (if (string= (buffer-name) eshell-buffer-name)
+      (delete-window)
+      (if-let ((window (get-buffer-window eshell-buffer-name))
+               (default-directory (projectile-project-root)))
+          (select-window window)
+        (-> (get-buffer-create eshell-buffer-name)
+            (display-buffer-in-side-window '(
+                                             (side . bottom)
+                                             (window-height . 16)))
+            (select-window))
+        (unless (derived-mode-p 'eshell-mode)
+          (eshell-mode)))))
+#+end_src
+
 * RYO Modal
 
 Here is my custom modal configuration, because the default Emacs bindings should never be used by anyone. Initially, I enjoyed the idea of vim bindings, but after trying them and realizing that a large majority of bindings were based on legacy, rather than mnemonics or ergonomics, I decided to create my own.
 
 I decided to use RYO modal, mostly because of how easy it is to define keys and other simple settings, but I may switch to Modalka or another package at a later date.
+
+Paradigm (todo): text editing should be modal keys, all others should be C- and M-
 
 ** Keybindings
 Switching between command and insert modes is done using =C-Space=, and movement is done using =ijkl=, because it feels more natural than vim bindings. Moving between words is done with =uo=, and holding shift during movement commands generally does larger movements.
@@ -138,7 +197,6 @@ Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill
   (require 'undo-fu)
   (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore)
   (global-set-key (kbd "C-SPC") 'ryo-modal-mode)
-  (global-set-key (kbd "C-<tab>") 'other-window)
   (ryo-modal-keys
    ("i" previous-line)
    ("j" backward-char)
@@ -154,6 +212,7 @@ Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill
    ("O" end-of-buffer)
    ("s" save-buffer)
    ("f" ysd-swiper-isearch)
+   ("r" query-replace)
    ("x" ysd-kill-region-or-line)
    ("c" ysd-copy-region-or-line)
    ("y" ysd-yank)
@@ -165,8 +224,11 @@ Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill
    ("b" switch-to-buffer)) ;; TODO change once I get a better way to switch buffers
 
   ;; Non modal keys
+  (global-set-key (kbd "C-<tab>") 'other-window)
   (global-set-key (kbd "C-y") 'clipboard-yank)
   (global-set-key (kbd "C-x k") 'kill-current-buffer)
+  (global-set-key (kbd "C-e") 'treemacs)
+  (global-set-key (kbd "C-t") 'ysd-shell)
 #+end_src
 
 ** Multiple Cursors
@@ -187,7 +249,7 @@ Activate command mode by default in all buffers except the minibuffer and exclud
 
 #+begin_src emacs-lisp
   (setq ryo-excluded-modes
-        '(eshell-mode dired-mode))
+        '(eshell-mode dired-mode treemacs-mode))
   
   (define-globalized-minor-mode ryo-modal-global-mode
     ryo-modal-mode
@@ -195,6 +257,18 @@ Activate command mode by default in all buffers except the minibuffer and exclud
                           (member major-mode ryo-excluded-modes))
                 (ryo-modal-mode 1))))
   (ryo-modal-global-mode 1)
+#+end_src
+
+* Emacs Application Framework
+Use the Emacs Application Framework to extend the functionality of Emacs for multithreaded capabilities, running web apps, and graphical capabilities within buffers
+
+#+begin_src emacs-lisp
+  (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
+
+  (require 'eaf)
+  (require 'eaf-browser)
+  (require 'eaf-demo)
+  (require 'eaf-terminal)
 #+end_src
 
 * Ivy Configuration
@@ -224,18 +298,101 @@ Move in text/between results using =C-ijkl= so navigation in the minibuffer is e
   (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
 #+end_src
 
-* File/Directory Browsing
-TODO: Make dired only show important info, deal with projectile and tramp?
+* File Browsing and Management
 
-For now, this section just =require='s some packages to frontload processing on emacs load, rather than when certain commands are called
+** Dired
+Make =dired= prettier, using icons and removing most unnecessary information unless shown manually.
 
 #+begin_src emacs-lisp
-  (require 'tramp)
-  (require 'dired)
+  (when (display-graphic-p)
+    (require 'all-the-icons))
+  (add-hook 'dired-mode-hook 'all-the-icons-dired-mode)
+#+end_src
+
+** Treemacs
+Use treemacs to display all my projects.
+
+#+begin_src emacs-lisp
+  (require 'treemacs)
+  (require 'treemacs-projectile)
+  (define-key treemacs-mode-map (kbd "i") 'treemacs-previous-line)
+  (define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
+  (define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
+#+end_src
+
+** Startup Page
+Replace the default Emacs startup page with one more suited to an IDE, providing projects to open and help/info about the setup.
+
+*** Project List
+Insert a list of projects that can be opened as links.
+Currently uses =treemacs= as a backend to find known projects, but might switch to projectile later.
+
+#+begin_src emacs-lisp
+  (defun ysd-make-projects-list ()
+    (when (file-exists-p treemacs-persist-file)
+      (with-temp-buffer
+        (let (linkspecs)
+          (insert-file-contents treemacs-persist-file)
+          (while (not (or (eq (line-end-position) (point-max))
+                          (eq (line-beginning-position 2) (point-max))))
+            (re-search-forward "^\\*\\*\s" nil 1)
+            (push (buffer-substring (point) (line-end-position)) linkspecs)
+            (re-search-forward "^\s-\spath\s::\s" nil t)
+            (push (buffer-substring (point) (line-end-position)) linkspecs))
+          (reverse linkspecs)))))
+#+end_src
+
+*** Replace Default Startup Screen
+The startup function called by =initial-buffer-choice=.
+
+#+begin_src emacs-lisp
+  (defun ysd-startup-screen ()
+    "Display a startup screen with list of projects from treemacs."
+    (let ((splash-buffer (get-buffer-create "*Yasper Emacs*")))
+      (with-current-buffer splash-buffer
+        (let ((inhibit-read-only t)
+              (default-text-properties '(face variable-pitch))
+              (projects (ysd-make-projects-list)))
+          (erase-buffer)
+          (setq default-directory command-line-default-directory)
+          (insert "Welcome to Yasper's Emacs.\n\n")
+          (insert "Agenda:\n")
+          (insert-button "View Full Agenda"
+                         'face 'link
+                         'action `(lambda (_button) (find-file (concat user-emacs-directory "todo.org")))
+                         'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "todo.org"))
+                         'follow-link t)
+	
+          (insert "\n\nHack Init: ")
+          (insert-button "init.org"
+                         'face 'link
+                         'action `(lambda (_button) (find-file (concat user-emacs-directory "init.org")))
+                         'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "init.org"))
+                         'follow-link t)
+          (insert "\n\nOpen Project:\n")
+          (while projects
+            (insert-button (pop projects)
+                           'face 'link
+                           'action `(lambda (_button) (dired ,(car projects)))
+                           'help-echo (concat "mouse-2, RET: " (pop projects))
+                           'follow-link t)
+            (insert "\n")))
+        (setq buffer-read-only t)
+        (set-buffer-modified-p nil)
+        (beginning-of-buffer))
+      splash-buffer))
 #+end_src
 
 * Development
 I want to make my development environment as universal as possible, using the same tool across the board whenever the possibility arises
+
+** Projectile
+Set up project managment through =projectile= and map it to ="p"= in the modal configuration. This may be switched to utilizing =project.el= in the future, but it is fairly barebones in version 27.2, which is what I currently use.
+
+#+begin_src emacs-lisp
+  (require 'projectile)
+  (ryo-modal-key "p" 'projectile-command-map)
+#+end_src
 
 ** Company
 Use =C-<movement>= to scroll through candidates, rather than the emacs defaults. This also leaves our movement keys free to instantly move the cursor instead of having to escape the candidate list first.
@@ -253,18 +410,10 @@ I am very open to the possibility of using other solutions such as ggtags or cta
 
 #+begin_src emacs-lisp
   (require 'semantic)
-  (global-semanticdb-minor-mode 1)
+  ;;(global-semanticdb-minor-mode 1)
   (global-semantic-idle-scheduler-mode 1)
   (add-hook 'c++-mode-hook 'semantic-mode)
   (add-hook 'python-mode-hook 'semantic-mode)
-#+end_src
-
-*** Finding Project Roots
-Semantic should only search through includes and files within the project when used as a backend for Company, so this function looks for =.git= folders, and will consider its parent folder as the root of the project. It is preferable not to use this, as it should be handled directly by project managment systems rather than handwritten by me.
-
-TODO put a function or integrate with EDE/projectile/tagging systems
-#+begin_src emacs-lisp
-  (require 'projectile)
 #+end_src
 
 ** Emacs Lisp
@@ -273,12 +422,31 @@ Customizations for working with Emacs Lisp
 #+begin_src emacs-lisp
   (add-hook 'emacs-lisp-mode 'show-paren-mode)
 #+end_src
+
 * Snippets
 Different snippet systems are designed for different purposes and different levels of robustness, so I have opted to use several snippet engines with mostly nonoverlapping purposes, rather than choosing one to rule them all.
 
 ** Abbrev
 #+begin_src emacs-lisp
 (setq abbrev-file-name "~/.emacs.d/abbrev_defs")
+#+end_src
+
+** Tide
+Tide uses =tsserver= as a backend for typescript and javascript as an alternative to LSP. =tsserver= was developed by Microsoft prior to the creation of LSP and still handles their intellisense, etc. for JS and TS in VSCode. So the decision must be made between using an independently developed TS/JS language server that complies with LSP, or using Tide to allow the use of Microsoft's =tsserver=.
+
+The following is taken mostly from Tide's GitHub page
+#+begin_src emacs-lisp
+  (defun setup-tide-mode ()
+    (interactive)
+    (tide-setup)
+    (flycheck-mode 1)
+    (setq flycheck-check-syntax-automatically '(save mode-enabled))
+    (eldoc-mode 1)
+    (tide-hl-identifier-mode 1)
+    (company-mode 1))
+
+  (add-hook 'before-save-hook 'tide-format-before-save)
+  (add-hook 'typescript-mode-hook #'setup-tide-mode)
 #+end_src
 
 * Theme
@@ -344,11 +512,31 @@ Launch Emacs in fullscreen by default.
   (add-to-list 'default-frame-alist '(fullscreen . fullboth))
 #+end_src
 
-** Minor Settings
-Enable/Disable stuff that's not directly changeable through custom.el
+** Common Sense Settings
+Set some basic common sense settings, which TODO can be overwritten by custom.el
 
 #+begin_src emacs-lisp
-  (setq ring-bell-function 'ignore)
+  (setq-default
+   ring-bell-function 'ignore
+   company-idle-delay 0.1
+   cursor-type '(bar . 4)
+   initial-buffer-choice 'ysd-startup-screen
+   line-number-mode t
+   mouse-wheel-progressive-speed nil
+   org-blank-before-new-entry '((heading . t) (plain-list-item))
+   org-bullets-bullet-list '(" ")
+   org-bullets-face-name 'fixed-pitch
+   org-ellipsis " ▾"
+   org-special-ctrl-a/e t
+   show-paren-mode t
+   truncate-lines t
+   which-key-mode t
+   create-lockfiles nil
+   auto-save-default nil
+   make-backup-files nil)
+  (tool-bar-mode -1)
+  (menu-bar-mode -1)
+  (scroll-bar-mode -1)
 #+end_src
 
 * Useful Resources
@@ -358,3 +546,10 @@ Enable/Disable stuff that's not directly changeable through custom.el
 - [[https://zzamboni.org/post/beautifying-org-mode-in-emacs/][Beautifying Org Mode by zzamboni]]
 - [[http://www.howardism.org/Technical/Emacs/orgmode-wordprocessor.html][Org Mode as a Word Processor]]
 - [[https://ashok-khanna.medium.com/introduction-to-dired-mode-91cecd3a06ff][Intro to Dired Mode]]
+- [[https://emacs-survey.netlify.app/2020/][2020 Emacs Survey Results]]
+
+** Other Emacs Setups
+- [[https://github.com/redguardtoo/emacs.d][Redguardtoo]]
+- [[https://github.com/purcell/emacs.d][Purcell Emacs]]
+- [[https://github.com/daviwil/emacs-from-scratch][David Wilson Emacs from Scratch]]
+

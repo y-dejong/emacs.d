@@ -1,6 +1,14 @@
 *~
+\#*
+.\#*
+*.elc
 .cache/
 .mc-lists.el
+/.session
+abbrev-defs
+auto-save-list/
+custom.el
+eaf/
 elpa/
 eshell/
 network-security.data
@@ -8,5 +16,8 @@ projectile-bookmarks.eld
 projectile.cache
 semanticdb/
 server/
+site-lisp/
+/session.*
+todo.org
 transient/
 url/
