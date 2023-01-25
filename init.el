@@ -311,6 +311,8 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (set-face-attribute 'org-level-3 nil :weight 'bold)
 (set-face-attribute 'org-level-4 nil :weight 'bold)
 
+(define-key org-mode-map (kbd "C-<tab>") nil)
+
 (require 'server)
 (unless (server-running-p)
   (server-start))

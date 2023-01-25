@@ -493,6 +493,11 @@ Again please note that faces are mostly defined in =custom.el=.
   (set-face-attribute 'org-level-4 nil :weight 'bold)
 #+end_src
 
+** Miscellaneous
+#+begin_src emacs-lisp
+  (define-key org-mode-map (kbd "C-<tab>") nil)
+#+end_src
+
 * Emacs Server
 Run emacs as a server in the background, and make the frame a client that connects to the local server. This allows files opened in file explorers to appear in an existing frame, rather than starting a new emacs window. In the future, I can also start the Emacs daemon on startup so that the startup time of opening the application is reduced. Until then, the binding for closing emacs also shuts down the server, so the server and the frame are tied together.
 
