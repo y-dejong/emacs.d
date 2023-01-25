@@ -14,6 +14,39 @@
 (unless package-archive-contents
   (package-refresh-contents))
 
+(defvar ysd-needed-packages
+  '(company
+    counsel
+    doom-themes
+    flycheck
+    ivy
+    js2-mode
+    magit
+    multiple-cursors
+    org
+    org-bullets
+    projectile
+    ryo-modal
+    tide
+    treemacs
+    treemacs-projectile
+    undo-fu
+    which-key
+    yasnippet)
+  "Packges that are used by init, and should be installed if not present.")
+
+(defun require-package (package &optional min-version no-refresh)
+  "Ask elpa to install given PACKAGE with MIN-VERSION.
+If NO-REFRESH is nil, `package-refresh-contents' is called."
+  (unless (package-installed-p package min-version)
+    (unless (or (assoc package package-archive-contents) no-refresh)
+      (message "Missing package: %s" package)
+      (package-refresh-contents))
+    (package-install package)))
+
+(dolist (package ysd-needed-packages)
+  (require-package package))
+
 (defun ysd-kill-region-or-line (&optional beg end)
   "Kill region if active, otherwise, kill whole line."
   (interactive (if (use-region-p) (list (region-beginning) (region-end))))
@@ -86,6 +119,7 @@
  ("O" end-of-buffer)
  ("s" save-buffer)
  ("f" swiper-isearch)
+ ("r" query-replace)
  ("x" ysd-kill-region-or-line)
  ("c" ysd-copy-region-or-line)
  ("y" yank)
@@ -117,6 +151,13 @@
               (ryo-modal-mode 1))))
 (ryo-modal-global-mode 1)
 
+(add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
+
+(require 'eaf)
+(require 'eaf-browser)
+(require 'eaf-demo)
+(require 'eaf-terminal)
+
 (require 'ivy)
 (require 'counsel)
 (ivy-mode 1)
@@ -140,16 +181,17 @@
 (define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
 
 (defun ysd-make-projects-list ()
-  (with-temp-buffer
-    (let (linkspecs)
-      (insert-file-contents treemacs-persist-file)
-      (while (not (or (eq (line-end-position) (point-max))
-                      (eq (line-beginning-position 2) (point-max))))
-        (re-search-forward "^\\*\\*\s" nil 1)
-        (push (buffer-substring (point) (line-end-position)) linkspecs)
-        (re-search-forward "^\s-\spath\s::\s" nil t)
-        (push (buffer-substring (point) (line-end-position)) linkspecs))
-      (reverse linkspecs))))
+  (when (file-exists-p treemacs-persist-file)
+    (with-temp-buffer
+      (let (linkspecs)
+        (insert-file-contents treemacs-persist-file)
+        (while (not (or (eq (line-end-position) (point-max))
+                        (eq (line-beginning-position 2) (point-max))))
+          (re-search-forward "^\\*\\*\s" nil 1)
+          (push (buffer-substring (point) (line-end-position)) linkspecs)
+          (re-search-forward "^\s-\spath\s::\s" nil t)
+          (push (buffer-substring (point) (line-end-position)) linkspecs))
+        (reverse linkspecs)))))
 
 (defun ysd-startup-screen ()
   "Display a startup screen with list of projects from treemacs."
@@ -161,7 +203,20 @@
         (erase-buffer)
         (setq default-directory command-line-default-directory)
         (insert "Welcome to Yasper's Emacs.\n\n")
-        (insert "Open Project:\n")
+        (insert "Agenda:\n")
+        (insert-button "View Full Agenda"
+                       'face 'link
+                       'action `(lambda (_button) (find-file (concat user-emacs-directory "todo.org")))
+                       'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "todo.org"))
+                       'follow-link t)
+
+        (insert "\n\nHack Init: ")
+        (insert-button "init.org"
+                       'face 'link
+                       'action `(lambda (_button) (find-file (concat user-emacs-directory "init.org")))
+                       'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "init.org"))
+                       'follow-link t)
+        (insert "\n\nOpen Project:\n")
         (while projects
           (insert-button (pop projects)
                          'face 'link
@@ -184,12 +239,24 @@
 (add-hook 'python-mode-hook 'company-mode)
 
 (require 'semantic)
-(global-semanticdb-minor-mode 1)
+;;(global-semanticdb-minor-mode 1)
 (global-semantic-idle-scheduler-mode 1)
 (add-hook 'c++-mode-hook 'semantic-mode)
 (add-hook 'python-mode-hook 'semantic-mode)
 
 (add-hook 'emacs-lisp-mode 'show-paren-mode)
+
+(defun setup-tide-mode ()
+  (interactive)
+  (tide-setup)
+  (flycheck-mode 1)
+  (setq flycheck-check-syntax-automatically '(save mode-enabled))
+  (eldoc-mode 1)
+  (tide-hl-identifier-mode 1)
+  (company-mode 1))
+
+(add-hook 'before-save-hook 'tide-format-before-save)
+(add-hook 'typescript-mode-hook #'setup-tide-mode)
 
 (setq ryo-modal-default-cursor-color "white")
 (require 'doom-themes)

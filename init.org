@@ -31,6 +31,39 @@ Packages are downloaded using the default =package.el=, using =GNU Elpa= and =Me
   (package-initialize)
   (unless package-archive-contents
     (package-refresh-contents))
+
+  (defvar ysd-needed-packages
+    '(company
+      counsel
+      doom-themes
+      flycheck
+      ivy
+      js2-mode
+      magit
+      multiple-cursors
+      org
+      org-bullets
+      projectile
+      ryo-modal
+      tide
+      treemacs
+      treemacs-projectile
+      undo-fu
+      which-key
+      yasnippet)
+    "Packges that are used by init, and should be installed if not present.")
+
+  (defun require-package (package &optional min-version no-refresh)
+    "Ask elpa to install given PACKAGE with MIN-VERSION.
+  If NO-REFRESH is nil, `package-refresh-contents' is called."
+    (unless (package-installed-p package min-version)
+      (unless (or (assoc package package-archive-contents) no-refresh)
+        (message "Missing package: %s" package)
+        (package-refresh-contents))
+      (package-install package)))
+
+  (dolist (package ysd-needed-packages)
+    (require-package package))
 #+end_src
 
 * Custom Functions
@@ -126,6 +159,8 @@ Here is my custom modal configuration, because the default Emacs bindings should
 
 I decided to use RYO modal, mostly because of how easy it is to define keys and other simple settings, but I may switch to Modalka or another package at a later date.
 
+Paradigm (todo): text editing should be modal keys, all others should be C- and M-
+
 ** Keybindings
 Switching between command and insert modes is done using =C-Space=, and movement is done using =ijkl=, because it feels more natural than vim bindings. Moving between words is done with =uo=, and holding shift during movement commands generally does larger movements.
 
@@ -151,6 +186,7 @@ Kill/copy/yank are done with =xcy= respectively, and make use of the custom kill
    ("O" end-of-buffer)
    ("s" save-buffer)
    ("f" swiper-isearch)
+   ("r" query-replace)
    ("x" ysd-kill-region-or-line)
    ("c" ysd-copy-region-or-line)
    ("y" yank)
@@ -195,6 +231,18 @@ Activate command mode by default in all buffers except the minibuffer and exclud
                           (member major-mode ryo-excluded-modes))
                 (ryo-modal-mode 1))))
   (ryo-modal-global-mode 1)
+#+end_src
+
+* Emacs Application Framework
+Use the Emacs Application Framework to extend the functionality of Emacs for multithreaded capabilities, running web apps, and graphical capabilities within buffers
+
+#+begin_src emacs-lisp
+  (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
+
+  (require 'eaf)
+  (require 'eaf-browser)
+  (require 'eaf-demo)
+  (require 'eaf-terminal)
 #+end_src
 
 * Ivy Configuration
@@ -246,16 +294,17 @@ Currently uses =treemacs= as a backend to find known projects, but might switch 
 
 #+begin_src emacs-lisp
   (defun ysd-make-projects-list ()
-    (with-temp-buffer
-      (let (linkspecs)
-        (insert-file-contents treemacs-persist-file)
-        (while (not (or (eq (line-end-position) (point-max))
-                        (eq (line-beginning-position 2) (point-max))))
-          (re-search-forward "^\\*\\*\s" nil 1)
-          (push (buffer-substring (point) (line-end-position)) linkspecs)
-          (re-search-forward "^\s-\spath\s::\s" nil t)
-          (push (buffer-substring (point) (line-end-position)) linkspecs))
-        (reverse linkspecs))))
+    (when (file-exists-p treemacs-persist-file)
+      (with-temp-buffer
+        (let (linkspecs)
+          (insert-file-contents treemacs-persist-file)
+          (while (not (or (eq (line-end-position) (point-max))
+                          (eq (line-beginning-position 2) (point-max))))
+            (re-search-forward "^\\*\\*\s" nil 1)
+            (push (buffer-substring (point) (line-end-position)) linkspecs)
+            (re-search-forward "^\s-\spath\s::\s" nil t)
+            (push (buffer-substring (point) (line-end-position)) linkspecs))
+          (reverse linkspecs)))))
 #+end_src
 
 *** Replace Default Startup Screen
@@ -272,7 +321,20 @@ The startup function called by =initial-buffer-choice=.
           (erase-buffer)
           (setq default-directory command-line-default-directory)
           (insert "Welcome to Yasper's Emacs.\n\n")
-          (insert "Open Project:\n")
+          (insert "Agenda:\n")
+          (insert-button "View Full Agenda"
+                         'face 'link
+                         'action `(lambda (_button) (find-file (concat user-emacs-directory "todo.org")))
+                         'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "todo.org"))
+                         'follow-link t)
+	
+          (insert "\n\nHack Init: ")
+          (insert-button "init.org"
+                         'face 'link
+                         'action `(lambda (_button) (find-file (concat user-emacs-directory "init.org")))
+                         'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "init.org"))
+                         'follow-link t)
+          (insert "\n\nOpen Project:\n")
           (while projects
             (insert-button (pop projects)
                            'face 'link
@@ -314,22 +376,35 @@ I am very open to the possibility of using other solutions such as ggtags or cta
 
 #+begin_src emacs-lisp
   (require 'semantic)
-  (global-semanticdb-minor-mode 1)
+  ;;(global-semanticdb-minor-mode 1)
   (global-semantic-idle-scheduler-mode 1)
   (add-hook 'c++-mode-hook 'semantic-mode)
   (add-hook 'python-mode-hook 'semantic-mode)
 #+end_src
-
-*** Finding Project Roots
-Semantic should only search through includes and files within the project when used as a backend for Company, so this function looks for =.git= folders, and will consider its parent folder as the root of the project. It is preferable not to use this, as it should be handled directly by project managment systems rather than handwritten by me.
-
-TODO put a function or integrate with EDE/projectile/tagging systems
 
 ** Emacs Lisp
 Customizations for working with Emacs Lisp
 
 #+begin_src emacs-lisp
   (add-hook 'emacs-lisp-mode 'show-paren-mode)
+#+end_src
+
+** Tide
+Tide uses =tsserver= as a backend for typescript and javascript as an alternative to LSP. =tsserver= was developed by Microsoft prior to the creation of LSP and still handles their intellisense, etc. for JS and TS in VSCode. So the decision must be made between using an independently developed TS/JS language server that complies with LSP, or using Tide to allow the use of Microsoft's =tsserver=.
+
+The following is taken mostly from Tide's GitHub page
+#+begin_src emacs-lisp
+  (defun setup-tide-mode ()
+    (interactive)
+    (tide-setup)
+    (flycheck-mode 1)
+    (setq flycheck-check-syntax-automatically '(save mode-enabled))
+    (eldoc-mode 1)
+    (tide-hl-identifier-mode 1)
+    (company-mode 1))
+
+  (add-hook 'before-save-hook 'tide-format-before-save)
+  (add-hook 'typescript-mode-hook #'setup-tide-mode)
 #+end_src
 
 * Theme
@@ -429,3 +504,10 @@ Set some basic common sense settings, which TODO can be overwritten by custom.el
 - [[https://zzamboni.org/post/beautifying-org-mode-in-emacs/][Beautifying Org Mode by zzamboni]]
 - [[http://www.howardism.org/Technical/Emacs/orgmode-wordprocessor.html][Org Mode as a Word Processor]]
 - [[https://ashok-khanna.medium.com/introduction-to-dired-mode-91cecd3a06ff][Intro to Dired Mode]]
+- [[https://emacs-survey.netlify.app/2020/][2020 Emacs Survey Results]]
+
+** Other Emacs Setups
+- [[https://github.com/redguardtoo/emacs.d][Redguardtoo]]
+- [[https://github.com/purcell/emacs.d][Purcell Emacs]]
+- [[https://github.com/daviwil/emacs-from-scratch][David Wilson Emacs from Scratch]]
+

@@ -10,6 +10,10 @@ semanticdb/
 /.session
 transient/
 /custom.el
+site-lisp/
+eaf/
+todo.org
+projectile-bookmarks.eld
 *~
 \#*
 .\#*
