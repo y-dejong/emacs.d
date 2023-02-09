@@ -5,7 +5,7 @@
     (global-set-key (kbd key) 'ignore)))
 
 (setq custom-file (concat user-emacs-directory "custom.el"))
-(load custom-file)
+(if (file-exists-p custom-file) (load custom-file))
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -15,7 +15,9 @@
   (package-refresh-contents))
 
 (defvar ysd-needed-packages
-  '(company
+  '(all-the-icons
+    all-the-icons-dired
+    company
     counsel
     doom-themes
     flycheck
@@ -167,12 +169,12 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
               (ryo-modal-mode 1))))
 (ryo-modal-global-mode 1)
 
-(add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
-
-(require 'eaf)
-(require 'eaf-browser)
-(require 'eaf-demo)
-(require 'eaf-terminal)
+(when (file-directory-p (concat user-emacs-directory "site-lisp/emacs-application-framework/"))
+  (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
+  (require 'eaf)
+  (require 'eaf-browser)
+  (require 'eaf-demo)
+  (require 'eaf-terminal))
 
 (require 'ivy)
 (require 'counsel)
@@ -265,7 +267,7 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (add-hook 'c++-mode-hook 'semantic-mode)
 (add-hook 'python-mode-hook 'semantic-mode)
 
-(add-hook 'emacs-lisp-mode 'show-paren-mode)
+;;(add-hook 'emacs-lisp-mode 'show-paren-mode)
 
 (setq abbrev-file-name "~/.emacs.d/abbrev_defs")
 

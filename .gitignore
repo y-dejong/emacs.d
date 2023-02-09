@@ -5,7 +5,6 @@
 .cache/
 .mc-lists.el
 /.session
-abbrev-defs
 auto-save-list/
 custom.el
 eaf/

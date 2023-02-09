@@ -18,7 +18,7 @@ Most of my preferred settings are set here using =setq-default=. This allows var
 
 #+begin_src emacs-lisp
   (setq custom-file (concat user-emacs-directory "custom.el"))
-  (load custom-file)
+  (if (file-exists-p custom-file) (load custom-file))
 #+end_src
 
 * Package Management
@@ -33,7 +33,9 @@ Packages are downloaded using the default =package.el=, using =GNU Elpa= and =Me
     (package-refresh-contents))
 
   (defvar ysd-needed-packages
-    '(company
+    '(all-the-icons
+      all-the-icons-dired
+      company
       counsel
       doom-themes
       flycheck
@@ -263,12 +265,12 @@ Activate command mode by default in all buffers except the minibuffer and exclud
 Use the Emacs Application Framework to extend the functionality of Emacs for multithreaded capabilities, running web apps, and graphical capabilities within buffers
 
 #+begin_src emacs-lisp
-  (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
-
-  (require 'eaf)
-  (require 'eaf-browser)
-  (require 'eaf-demo)
-  (require 'eaf-terminal)
+  (when (file-directory-p (concat user-emacs-directory "site-lisp/emacs-application-framework/"))
+    (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
+    (require 'eaf)
+    (require 'eaf-browser)
+    (require 'eaf-demo)
+    (require 'eaf-terminal))
 #+end_src
 
 * Ivy Configuration
