@@ -1,0 +1,21 @@
+#!/bin/bash
+
+EMACS_DIR=${EMACS_DIR:-~/.emacs.d}
+
+# Check if directory exists
+if [ ! -d "$EMACS_DIR" ]; then
+  echo "Directory $EMACS_DIR does not exist"
+  read -p "Create directory? (y/n): " response
+  if [ "$response" = "y" ]; then
+    mkdir -p "$EMACS_DIR"
+  else
+    echo "Aborting script"
+    exit 1
+  fi
+fi
+
+for file in init.*; do
+    if [ -f "$file" ]; then
+        ln -si "$(pwd)/$file" "$EMACS_DIR/$file"
+    fi
+done
