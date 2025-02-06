@@ -1,346 +1,611 @@
-(let ((keys
-       '("C-@" "C-a" "C-b" "C-d" "C-e" "C-f" "C-k" "C-n" "C-p" "C-r"
-         "C-s" "C-w" "C-x o")))
-  (dolist (key keys)
-    (global-set-key (kbd key) 'ignore)))
-
-(setq custom-file (concat user-emacs-directory "custom.el"))
-(if (file-exists-p custom-file) (load custom-file))
-
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 
-(package-initialize)
-(unless package-archive-contents
-  (package-refresh-contents))
-
-(defvar ysd-needed-packages
-  '(all-the-icons
-    all-the-icons-dired
-    company
-    counsel
-    doom-themes
-    flycheck
-    ivy
-    js2-mode
-    magit
-    multiple-cursors
-    org
-    org-bullets
-    projectile
-    ryo-modal
-    tide
-    treemacs
-    treemacs-projectile
-    undo-fu
-    which-key
-    yasnippet)
-  "Packges that are used by init, and should be installed if not present.")
-
-(defun require-package (package &optional min-version no-refresh)
+(defun ysd-require (package &optional min-version no-refresh)
   "Ask elpa to install given PACKAGE with MIN-VERSION.
 If NO-REFRESH is nil, `package-refresh-contents' is called."
   (unless (package-installed-p package min-version)
-    (unless (or (assoc package package-archive-contents) no-refresh)
-      (message "Missing package: %s" package)
-      (package-refresh-contents))
-    (package-install package)))
+	(message "Missing package: %s" package)
+	(unless (or (assoc package package-archive-contents) no-refresh)
+  (package-refresh-contents))
+	(package-install package)
+	(push package 'package-selected-packages))
+  (require package))
 
-(dolist (package ysd-needed-packages)
-  (require-package package))
+(load "~/.emacs.d/env.el")
 
 (defun ysd-kill-region-or-line (&optional beg end)
   "Kill region if active, otherwise, kill whole line."
   (interactive (if (use-region-p) (list (region-beginning) (region-end))))
   (if (use-region-p)
-    (kill-region beg end)
-    (kill-whole-line)))
+  (kill-region beg end)
+	(kill-whole-line)))
 
 (defun ysd-copy-region-or-line (&optional beg end)
   "Copy region if active, otherwise, copy whole line."
   (interactive (if (use-region-p) (list (region-beginning) (region-end))))
   (if (use-region-p) ;; If there is a region
-    (copy-region-as-kill beg end)
-    (copy-region-as-kill (line-beginning-position)
-                    (line-beginning-position 2))))
+  (copy-region-as-kill beg end)
+	(copy-region-as-kill (line-beginning-position)
+			 (line-beginning-position 2))))
 
 (defun ysd-yank ()
   "Yank or cycle through the kill ring."
   (interactive "*")
   (if (eq last-command 'yank)
-    (yank-pop)
+  (yank-pop)
     (setq kill-ring-yank-pointer kill-ring)
     (yank)))
 
-(defun ysd-delete-line (&optional line)
-  "Delete the line that point is currently on."
-  (interactive "d")
-  (delete-region (line-beginning-position) (line-beginning-position 2)))
+(defmacro define-key-with-fallback (keymap key def condition &optional mode)
+  "Define key with fallback. Binds KEY to definition DEF in keymap KEYMAP, 
+   the binding is active when the CONDITION is true. Otherwise turns MODE off 
+   and re-enables previous definition for KEY. If MODE is nil, tries to recover 
+   it by stripping off \"-map\" from KEYMAP name."
+  `(define-key ,keymap ,key
+	 (lambda () (interactive)
+		(if ,condition ,def
+		  (let* ((,(if mode mode
+					 (let* ((keymap-str (symbol-name keymap))
+							(mode-name-end (- (string-width keymap-str) 4)))
+					   (if (string= "-map" (substring keymap-str mode-name-end))
+						   (intern (substring keymap-str 0 mode-name-end))
+						 (error "Could not deduce mode name from keymap name (\"-map\" missing?)")))) 
+				  nil)
+				 (original-func (key-binding ,key)))
+			(call-interactively original-func))))))
 
-(defun ysd-insert-char ()
-  (interactive)
-  (ryo-modal-mode 0)
-  (add-hook 'post-self-insert-hook 'ysd-after-insert-char))
+(ysd-require 'ryo-modal)
 
-(defun ysd-after-insert-char ()
-  (ryo-modal-mode 1)
-  (remove-hook 'post-self-insert-hook 'ysd-after-insert-char))
+(define-key ryo-modal-mode-map [remap self-insert-command] 'ignore) ;; Make all letters/etc. do nothing
 
-(defun bash ()
-  (interactive)
-  (async-shell-command "c:/windows/system32/bash.exe -i"
-                       nil
-                       nil))
+(global-set-key (kbd "<f1>") 'ryo-modal-mode)
 
-(defun ysd-swiper-isearch (&optional beg end)
-  "swiper-isearch using the current region if non-nil."
-  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
-  (if (not (use-region-p))
-    (swiper-isearch)
-    (deactivate-mark)
-    (swiper-isearch (buffer-substring beg end))))
-
-(require 'eshell)
-(defun ysd-shell ()
-  "Toggle an Eshell window at the bottom of the screen."
-  (interactive)
-  (cl-assert eshell-buffer-name)
-  (if (string= (buffer-name) eshell-buffer-name)
-    (delete-window)
-    (if-let ((window (get-buffer-window eshell-buffer-name))
-             (default-directory (projectile-project-root)))
-        (select-window window)
-      (-> (get-buffer-create eshell-buffer-name)
-          (display-buffer-in-side-window '(
-                                           (side . bottom)
-                                           (window-height . 16)))
-          (select-window))
-      (unless (derived-mode-p 'eshell-mode)
-        (eshell-mode)))))
-
-(require 'ryo-modal)
-(require 'undo-fu)
-(define-key ryo-modal-mode-map [remap self-insert-command] 'ignore)
-(global-set-key (kbd "C-SPC") 'ryo-modal-mode)
 (ryo-modal-keys
  ("i" previous-line)
- ("j" backward-char)
  ("k" next-line)
+ ("j" backward-char)
  ("l" forward-char)
  ("u" backward-word)
  ("o" forward-word)
- ("I" scroll-down-command)
- ("K" scroll-up-command)
+ ("I" scroll-down-line)
+ ("K" scroll-up-line)
  ("J" move-beginning-of-line)
  ("L" move-end-of-line)
  ("U" beginning-of-buffer)
  ("O" end-of-buffer)
- ("s" save-buffer)
- ("f" ysd-swiper-isearch)
  ("r" query-replace)
  ("x" ysd-kill-region-or-line)
  ("c" ysd-copy-region-or-line)
  ("y" ysd-yank)
- ("X" ysd-delete-line)
- ("z" undo-fu-only-undo)
- ("Z" undo-fu-only-redo)
- ("w" ysd-insert-char)
- ("SPC" set-mark-command)
- ("b" switch-to-buffer)) ;; TODO change once I get a better way to switch buffers
+ ("z" undo)
+ ("Z" undo-redo)
+ ("SPC" set-mark-command))
 
-;; Non modal keys
-(global-set-key (kbd "C-<tab>") 'other-window)
-(global-set-key (kbd "C-y") 'clipboard-yank)
-(global-set-key (kbd "C-x k") 'kill-current-buffer)
-(global-set-key (kbd "C-e") 'treemacs)
-(global-set-key (kbd "C-t") 'ysd-shell)
-
-(global-set-key (kbd "C-c m l") 'mc/mark-next-like-this)
-
-(setq-default ryo-modal-cursor-type '(bar . 4))
+(global-set-key (kbd "C-<tab>") 'other-window) ;; TODO Adapt for terminal interface
 
 (setq ryo-excluded-modes
-      '(eshell-mode dired-mode treemacs-mode))
+  '(eshell-mode dired-mode treemacs-mode vterm-mode inferior-python-mode))
+
+(add-hook 'window-selection-change-functions
+	  (lambda (buf) (interactive)
+		(unless (or (minibufferp (window-buffer (old-selected-window)))
+			(minibufferp (current-buffer))
+			(member major-mode ryo-excluded-modes))
+	  (ryo-modal-mode 1))))
+
 
 (define-globalized-minor-mode ryo-modal-global-mode
   ryo-modal-mode
-  (lambda() (unless (or (minibufferp)
-                        (member major-mode ryo-excluded-modes))
-              (ryo-modal-mode 1))))
+  (lambda () (unless (or (minibufferp)
+			 (member major-mode ryo-excluded-modes))
+	   (ryo-modal-mode 1))))
+
 (ryo-modal-global-mode 1)
 
-(when (file-directory-p (concat user-emacs-directory "site-lisp/emacs-application-framework/"))
-  (add-to-list 'load-path "~/.emacs.d/site-lisp/emacs-application-framework/")
-  (require 'eaf)
-  (require 'eaf-browser)
-  (require 'eaf-demo)
-  (require 'eaf-terminal))
+(global-set-key (kbd "C-s") 'save-buffer)
+(global-set-key (kbd "C-r") 'revert-buffer)
 
-(require 'ivy)
-(require 'counsel)
+(ysd-require 'which-key)
+(which-key-setup-side-window-right)
+(setq which-key-idle-delay 0.4
+	  which-key-use-C-h-commands t)
+
+(defun ysd-which-key-show-top-level-excluding-ryo ()
+  (interactive)
+  (let ((ryo-modal-mode nil))
+	(which-key-show-top-level)))
+(ryo-modal-key "?" 'ysd-which-key-show-top-level-excluding-ryo)
+
+; Workaround for a paging key that has another keybind attached in underlying modes
+(defun ysd-which-key-maybe-C-h-dispatch ()
+  (interactive)
+  (if (which-key--popup-showing-p) (which-key-C-h-dispatch)
+	(let ((which-key-mode nil))
+	  (command-execute (key-binding "?")))))
+(push 'ysd-which-key-maybe-C-h-dispatch which-key--paging-functions)
+(keymap-set which-key-mode-map "?" 'ysd-which-key-maybe-C-h-dispatch)
+
+; Paging keys that match the rest of the config
+(keymap-set which-key-C-h-map "k" 'which-key-show-next-page-cycle)
+(keymap-set which-key-C-h-map "i" 'which-key-show-previous-page-cycle)
+(which-key-mode 1)
+
+(ysd-require 'counsel)
 (ivy-mode 1)
+
+(global-set-key (kbd "C-f") 'counsel-find-file)
 (global-set-key (kbd "M-x") 'counsel-M-x)
-(global-set-key (kbd "M-y") 'counsel-yank-pop)
+(global-set-key (kbd "C-b") 'ivy-switch-buffer)
 
-(ivy-define-key ivy-minibuffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; Workaround because emacs equates "C-i" == "TAB"
-  (ivy-define-key ivy-minibuffer-map (kbd "C-i") 'ivy-previous-line)
-  (ivy-define-key ivy-minibuffer-map (kbd "C-k") 'ivy-next-line)
-  (ivy-define-key ivy-minibuffer-map (kbd "C-u") 'ivy-beginning-of-buffer)
-  (ivy-define-key ivy-minibuffer-map (kbd "C-o") 'ivy-end-of-buffer)
+;; Minibuffer bindings
+(ivy-define-key ivy-minibuffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; Workaround since C-i and TAB are the same, but <tab> is different
+(ivy-define-key ivy-minibuffer-map (kbd "C-i") 'ivy-previous-line)
+(ivy-define-key ivy-minibuffer-map (kbd "C-k") 'ivy-next-line)
+(ivy-define-key ivy-minibuffer-map (kbd "C-u") 'ivy-beginning-of-buffer)
+(ivy-define-key ivy-minibuffer-map (kbd "C-o") 'ivy-end-of-buffer)
 
-(ivy-define-key ivy-switch-buffer-map (kbd "<tab>") 'ivy-partial-or-done) ;; "C-i" workaround
-  (ivy-define-key ivy-switch-buffer-map (kbd "C-i") 'ivy-previous-line)
-  (ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
-  (ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
+;; Switch buffer bindings
+(ivy-define-key ivy-switch-buffer-map (kbd "C-k") 'ivy-next-line)
+(ivy-define-key ivy-switch-buffer-map (kbd "C-d") 'ivy-switch-buffer-kill)
 
-(when (display-graphic-p)
-  (require 'all-the-icons))
-(add-hook 'dired-mode-hook 'all-the-icons-dired-mode)
+(defun ysd-ivy-minibuffer-grow ()
+  (interactive)
+  (setq-local max-mini-window-height
+			  (cl-incf ivy-height)))
 
-(require 'treemacs)
-(require 'treemacs-projectile)
+(defun ysd-ivy-minibuffer-shrink ()
+  (interactive)
+  (when (> ivy-height 2)
+  (setq-local max-mini-window-height
+			  (cl-decf ivy-height))
+  (window-resize nil -1)))
+
+(ivy-define-key ivy-minibuffer-map (kbd "M-I")
+		'ysd-ivy-minibuffer-grow)
+(ivy-define-key ivy-minibuffer-map (kbd "M-K")
+		'ysd-ivy-minibuffer-shrink)
+
+(define-key swiper-map (kbd "C-r") 'swiper-query-replace)
+
+(defun ysd-swiper-dwim (&optional beg end)
+  (interactive (if (use-region-p) (list (region-beginning) (region-end))))
+  (if (use-region-p)
+	  (swiper (buffer-substring beg end))
+	(call-interactively 'swiper)))
+(ryo-modal-key "s" 'ysd-swiper-dwim)
+(ryo-modal-key "S" 'swiper-thing-at-point)
+
+(add-to-list 'ivy-initial-inputs-alist '(counsel-M-x . ""))
+
+(require 'url)
+(let ((theme-path (file-name-as-directory (locate-user-emacs-file "themes"))))
+
+  ;; Download theme file from GitHub if it does not exist
+  (unless
+  (file-exists-p (concat theme-path "catppuccin-theme.el"))
+    (url-copy-file "https://raw.githubusercontent.com/catppuccin/emacs/main/catppuccin-theme.el" (concat theme-path "catppuccin-theme.el")))
+
+  ;; load theme
+  (add-to-list 'custom-theme-load-path theme-path)
+  (setq catppuccin-flavor 'macchiato)
+  (load-theme 'catppuccin t))
+
+(set-face-attribute 'trailing-whitespace nil :background (catppuccin-get-color 'maroon))
+
+(setq-default
+ cursor-type '(bar . 2)
+ truncate-lines t)
+
+(setq ryo-modal-default-cursor-color (face-attribute 'cursor :background)
+  ryo-modal-cursor-type '(bar . 2)
+  ryo-modal-cursor-color (catppuccin-get-color 'text))
+
+(global-display-line-numbers-mode 1)
+
+(dolist (mode '(org-mode-hook
+		fundamental-mode-hook
+		help-mode-hook))
+
+  (add-hook mode (lambda ()
+		   (display-line-numbers-mode 0)
+		   (setq truncate-lines nil)
+		   (visual-line-mode 1))))
+
+(ysd-require 'telephone-line)
+
+(defun ysd-make-header-line-mouse-map (mouse function)
+  (let ((map (make-sparse-keymap)))
+	(define-key map (vector 'header-line mouse) function)
+	map))
+
+;;(set-face-attribute 'mode-line nil :background (catppuccin-get-color 'overlay1))
+(set-face-attribute 'telephone-line-evil-normal nil :foreground (catppuccin-get-color 'red) :background (catppuccin-get-color 'base))
+(set-face-attribute 'telephone-line-evil-insert nil :foreground (catppuccin-get-color 'green) :background (catppuccin-get-color 'base))
+
+(defface ysd-tele-line-modified
+  `((t (:foreground ,(catppuccin-get-color 'red) :background ,(catppuccin-get-color 'surface2))))
+  "Telephone line modified face"
+  :group 'telephone-line)
+
+(defface ysd-surface2-bg
+  `((t (:background ,(catppuccin-get-color 'surface2))))
+  "Surface2 background face"
+  :group 'telephone-line)
+
+(defface ysd-surface1-bg
+  `((t :background ,(catppuccin-get-color 'surface1)))
+  "Surface1 background face"
+  :group 'telephone-line)
+
+(defface ysd-invisible
+  `((t (:foreground ,(catppuccin-get-color 'base) :background ,(catppuccin-get-color 'base))))
+  "Surface1 background face"
+  :group 'telephone-line)
+
+(defun ysd-tele-line-surface1-face (active)
+  (cond ((not active) 'mode-line-inactive)
+		(t 'ysd-surface1-bg)))
+
+(defun ysd-tele-line-surface2-face (active)
+  (cond ((not active) 'mode-line-inactive)
+		(t 'ysd-surface2-bg)))
+
+
+(defun ysd-tele-line-buffer-face (active)
+  'ysd-invisible)
+
+(telephone-line-defsegment* ysd-buffer-segment ()
+  " ")
+
+(push '(surface2 . ysd-tele-line-surface2-face) telephone-line-faces)
+(push '(surface1 . ysd-tele-line-surface1-face) telephone-line-faces)
+(push '(buffer . ysd-tele-line-buffer-face) telephone-line-faces)
+
+(defun ysd-tele-line-modified-face (active)
+  (cond ((not active) 'mode-line-inactive)
+		((buffer-modified-p) 'ysd-tele-line-modified)
+		(t 'ysd-surface2-bg)))
+(push '(modif . ysd-tele-line-modified-face) telephone-line-faces)
+
+(defun ysd-modal-face (active)
+  "Return an appropriate face depending whether ryo-modal is activated, given whether frame is ACTIVE."
+  (cond ((not active) 'ysd-invisible)
+		((not (boundp 'ryo-modal-mode)) 'mode-line)
+		((not ryo-modal-mode) 'telephone-line-evil-insert)
+		(t 'telephone-line-evil-normal)))
+(push '(ysd-modal . ysd-modal-face) telephone-line-faces)
+
+(telephone-line-defsegment* ysd-ryo-modal-segment ()
+  "◉")
+
+(defun ysd-set-coding-system (e)
+  (interactive "e")
+  (with-selected-window (posn-window (event-start e))
+	(call-interactively 'set-buffer-file-coding-system)))
+
+(telephone-line-defsegment* ysd-telephone-line-encoding-segment ()
+  (propertize
+   (upcase (symbol-name
+			(plist-get (coding-system-plist buffer-file-coding-system) :name)))
+   'help-echo "Buffer coding system:\nmouse-1: Change"
+   'local-map (ysd-make-header-line-mouse-map
+			   'mouse-1 (lambda (e)
+						  (interactive "e")
+						  (with-selected-window (posn-window (event-start e))
+							(call-interactively 'set-buffer-file-coding-system))))
+   'mouse-face 'mode-line-highlight))
+
+
+(telephone-line-defsegment* ysd-telephone-line-eol-segment ()
+  (propertize
+   (pcase (coding-system-eol-type buffer-file-coding-system)
+	 (0 "LF")
+	 (1 "CRLF")
+	 (2 "CR"))
+   'help-echo "End-of-line style:\nmouse-1: Cycle"
+   'local-map (ysd-make-header-line-mouse-map
+			   'mouse-1 'mode-line-change-eol)
+   'mouse-face 'mode-line-highlight))
+
+;; Circle separator
+(defvar telephone-line-halfcircle-right
+  (make-instance 'telephone-line-separator
+				 :axis-func (lambda (x) (let ((result (sqrt (- 9.869 (expt x 2)))))
+										  (if (isnan result) 0 result)))
+				 :alt-separator telephone-line-utf-abs-right))
+
+(defvar telephone-line-halfcircle-left
+  (make-instance 'telephone-line-separator
+				 :axis-func (lambda (x) (let ((result (- (sqrt (- 9.869 (expt x 2))))))
+										  (if (isnan result) 0 result)))
+				 :alt-separator telephone-line-utf-abs-left))
+
+(defvar telephone-line-halfcircle-hollow-right
+  (make-instance 'telephone-line-subseparator
+				 :axis-func (lambda (x) (let ((result (sqrt (- 9.869 (expt x 2)))))
+										  (if (isnan result) 0 result)))
+				 :alt-separator telephone-line-utf-abs-hollow-right))
+
+(defvar telephone-line-halfcircle-hollow-left
+  (make-instance 'telephone-line-subseparator
+				 :axis-func (lambda (x) (let ((result (- (sqrt (- 9.869 (expt x 2))))))
+										  (if (isnan result) 0 result)))
+				 :alt-separator telephone-line-utf-abs-hollow-left))
+
+(setq
+ telephone-line-lhs
+ '((ysd-modal . (ysd-ryo-modal-segment))
+   (modif . (telephone-line-buffer-name-segment))
+   (surface1 . (telephone-line-major-mode-segment
+				telephone-line-minor-mode-segment)))
+ telephone-line-rhs
+ '((surface1 . (ysd-telephone-line-encoding-segment))
+   (surface2 . (ysd-telephone-line-eol-segment))
+   (buffer . (ysd-buffer-segment)))
+
+ telephone-line-target 'header-line ;; TODO disable header-line option in Emacs <28
+ telephone-line-primary-left-separator telephone-line-halfcircle-left
+ telephone-line-primary-right-separator telephone-line-halfcircle-right)
+
+(setq-default mode-line-format nil)
+(telephone-line-mode 1)
+
+(defun swap-header-and-mode-line (symbol newval operation where)
+  (with-current-buffer where
+	(when (and (eq operation 'set) (not (eq newval (default-value 'header-line-format))))
+	  (setq mode-line-format newval)
+	  (run-with-timer 0 nil (lambda () (setq header-line-format (default-value 'header-line-format)))))))
+;; run-with-timer 0 waits until after function ends to change header-line-format back to the original value
+
+(add-variable-watcher 'header-line-format 'swap-header-and-mode-line)
+
+(ysd-require 'diminish)
+(let ((diminished-modes
+	   '(ivy-mode ryo-modal-mode which-key-mode)))
+  (dolist (mode diminished-modes)
+	(diminish mode)))
+
+(ysd-require 'projectile)
+(ysd-require 'counsel-projectile)
+(define-key projectile-mode-map (kbd "C-p") projectile-command-map)
+(setq projectile-switch-project-action #'projectile-dired)
+(projectile-mode 1)
+(counsel-projectile-mode 1)
+
+(ysd-require 'treemacs)
+(ysd-require 'treemacs-projectile)
 (define-key treemacs-mode-map (kbd "i") 'treemacs-previous-line)
 (define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
-(define-key treemacs-mode-map (kbd "e") 'treemacs-quit)
 
-(defun ysd-make-projects-list ()
-  (when (file-exists-p treemacs-persist-file)
-    (with-temp-buffer
-      (let (linkspecs)
-        (insert-file-contents treemacs-persist-file)
-        (while (not (or (eq (line-end-position) (point-max))
-                        (eq (line-beginning-position 2) (point-max))))
-          (re-search-forward "^\\*\\*\s" nil 1)
-          (push (buffer-substring (point) (line-end-position)) linkspecs)
-          (re-search-forward "^\s-\spath\s::\s" nil t)
-          (push (buffer-substring (point) (line-end-position)) linkspecs))
-        (reverse linkspecs)))))
+(global-set-key (kbd "C-e") 'treemacs)
 
-(defun ysd-startup-screen ()
-  "Display a startup screen with list of projects from treemacs."
-  (let ((splash-buffer (get-buffer-create "*Yasper Emacs*")))
-    (with-current-buffer splash-buffer
-      (let ((inhibit-read-only t)
-            (default-text-properties '(face variable-pitch))
-            (projects (ysd-make-projects-list)))
-        (erase-buffer)
-        (setq default-directory command-line-default-directory)
-        (insert "Welcome to Yasper's Emacs.\n\n")
-        (insert "Agenda:\n")
-        (insert-button "View Full Agenda"
-                       'face 'link
-                       'action `(lambda (_button) (find-file (concat user-emacs-directory "todo.org")))
-                       'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "todo.org"))
-                       'follow-link t)
+(ysd-require 'company)
+(keymap-set company-active-map "C-k" 'company-select-next-or-abort)
+(keymap-set company-active-map "C-k" 'company-select-previous-or-abort)
+(keymap-set company-active-map "C-k" 'company-select-next-or-abort)
+(keymap-set company-active-map "C-i" 'company-select-previous-or-abort)
 
-        (insert "\n\nHack Init: ")
-        (insert-button "init.org"
-                       'face 'link
-                       'action `(lambda (_button) (find-file (concat user-emacs-directory "init.org")))
-                       'help-echo (concat "mouse-2, RET: " (concat user-emacs-directory "init.org"))
-                       'follow-link t)
-        (insert "\n\nOpen Project:\n")
-        (while projects
-          (insert-button (pop projects)
-                         'face 'link
-                         'action `(lambda (_button) (dired ,(car projects)))
-                         'help-echo (concat "mouse-2, RET: " (pop projects))
-                         'follow-link t)
-          (insert "\n")))
-      (setq buffer-read-only t)
-      (set-buffer-modified-p nil)
-      (beginning-of-buffer))
-    splash-buffer))
+(setq-default
+ tab-width 4)
 
-(require 'projectile)
-(ryo-modal-key "p" 'projectile-command-map)
+(require 'url)
+(let ((tree-sitter-dir (file-name-as-directory (locate-user-emacs-file "tree-sitter"))))
+  (unless (file-exists-p tree-sitter-dir)
+	(make-directory tree-sitter-dir)
+	(url-copy-file
+	 "https://github.com/emacs-tree-sitter/tree-sitter-langs/releases/download/0.12.224/tree-sitter-grammars.x86_64-unknown-linux-gnu.v0.12.224.tar.gz"
+	 (concat tree-sitter-dir "tree-sitter-grammars.tar.gz"))
+	(shell-command (concat "tar xzf " (concat tree-sitter-dir "tree-sitter-grammars.tar.gz") " -C " tree-sitter-dir))
+;; Rename *.so to libtree-sitter-*.so
+(dolist (file (directory-files tree-sitter-dir t "\\.so$"))
+  (rename-file file (concat tree-sitter-dir "libtree-sitter-" (file-name-nondirectory file))))))
 
-(require 'company)
-(define-key company-active-map (kbd "C-k") 'company-select-next-or-abort)
-(define-key company-active-map (kbd "C-i") 'company-select-previous-or-abort)
-(add-hook 'c++-mode-hook 'company-mode)
-(add-hook 'python-mode-hook 'company-mode)
+(setq major-mode-remap-alist
+	  '((c-or-c++mode . c-or-c++-ts-mode)
+		(c-mode . c-ts-mode)
+		(c++-mode . c++-ts-mode)
+		(python-mode . python-ts-mode)))
 
-(require 'semantic)
-;;(global-semanticdb-minor-mode 1)
-(global-semantic-idle-scheduler-mode 1)
-(add-hook 'c++-mode-hook 'semantic-mode)
-(add-hook 'python-mode-hook 'semantic-mode)
+(ysd-require 'origami)
 
-;;(add-hook 'emacs-lisp-mode 'show-paren-mode)
+(defun ysd-origami-close-all-top-level-nodes (buffer)
+  (interactive (list (current-buffer)))
+  (-when-let (tree (origami-get-fold-tree buffer))
+	(origami-apply-new-tree
+	 buffer tree (origami-store-cached-tree
+				  buffer
+				  (origami-fold-children-set
+				   tree
+				   (-map (lambda (node) (origami-fold-open-set node nil))
+						 (origami-fold-children tree)))))))
 
-(setq abbrev-file-name "~/.emacs.d/abbrev_defs")
+(defun ysd-origami-open-all-top-level-nodes (buffer)
+  (interactive (list (current-buffer)))
+  (-when-let (tree (origami-get-fold-tree buffer))
+	(origami-apply-new-tree
+	 buffer tree (origami-store-cached-tree
+				  buffer
+				  (origami-fold-children-set
+				   tree
+				   (-map (lambda (node) (origami-fold-open-set node t))
+						 (origami-fold-children tree)))))))
 
-(defun setup-tide-mode ()
+(defun ysd-origami-close-children (buffer point)
+  (interactive (list (current-buffer) (point)))
+  (when-let ((tree (origami-get-fold-tree buffer))
+			 (path (origami-fold-find-path-containing tree point)))
+	  (origami-apply-new-tree
+	   buffer tree (origami-store-cached-tree
+					buffer
+					(origami-fold-assoc
+					 path
+					 (lambda (parent)
+					   (origami-fold-children-set
+						parent
+						(-map (lambda (node) (origami-fold-open-set node nil))
+							  (origami-fold-children parent)))))))))
+
+(defun ysd-origami-open-children (buffer point)
+  (interactive (list (current-buffer) (point)))
+  (when-let ((tree (origami-get-fold-tree buffer))
+			 (path (origami-fold-find-path-containing tree point)))
+	  (origami-apply-new-tree
+	   buffer tree (origami-store-cached-tree
+					buffer
+					(origami-fold-assoc
+					 path
+					 (lambda (parent)
+					   (origami-fold-children-set
+						parent
+						(-map (lambda (node) (origami-fold-open-set node t))
+							  (origami-fold-children parent)))))))))
+
+(add-hook 'origami-mode
+	  (lambda ()
+		(ryo-modal-key "v" 'origami-toggle-node)))
+
+(ysd-require 'typescript-mode)
+(ysd-require 'tide)
+(ysd-require 'flycheck)
+(ysd-require 'company)
+(ysd-require 'prettier-js)
+
+(defun setup-typescript-mode ()
   (interactive)
+
+  ;;Tide setup
   (tide-setup)
   (flycheck-mode 1)
   (setq flycheck-check-syntax-automatically '(save mode-enabled))
   (eldoc-mode 1)
   (tide-hl-identifier-mode 1)
-  (company-mode 1))
+  (company-mode 1)
+  (electric-pair-mode 1)
+  (origami-mode 1)
+  (indent-tabs-mode -1)
 
-(add-hook 'before-save-hook 'tide-format-before-save)
-(add-hook 'typescript-mode-hook #'setup-tide-mode)
+  (setq
+   typescript-indent-level tab-width
+   js-indent-level 2))
 
-(setq ryo-modal-default-cursor-color "white")
-(require 'doom-themes)
-(setq doom-themes-enable-bold t
-      doom-themes-enable-italic t)
-(load-theme 'doom-vibrant t)
+(add-hook 'typescript-mode-hook #'setup-typescript-mode)
+;;(add-hook 'typescript-mode-hook 'prettier-js-mode)
 
-(require 'org)
-(setq org-startup-indented t)
-(setq org-hide-emphasis-markers t)
-(font-lock-add-keywords 'org-mode
-                        '(("^ +\\([-]\\) "
-                           (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•"))))))
-(ryo-modal-major-mode-keys
- 'org-mode
- ("J" org-beginning-of-line)
- ("L" org-end-of-line))
+(add-hook 'js-mode-hook #'setup-typescript-mode)
+;;(add-hook 'js-mode-hook 'prettier-js-mode)
 
-(require 'org-bullets)
-(add-hook 'org-mode-hook (lambda() (org-bullets-mode 1)))
-(add-hook 'org-mode-hook 'variable-pitch-mode)
-(add-hook 'org-mode-hook 'visual-line-mode)
-
-;; Org Look
-(add-hook 'org-mode-hook (lambda() (setq line-spacing 0.05)))
-(set-fontset-font t 'unicode "Cascadia Mono" nil 'prepend)
-(set-face-attribute 'org-level-1 nil :weight 'bold)
-(set-face-attribute 'org-level-2 nil :weight 'bold)
-(set-face-attribute 'org-level-3 nil :weight 'bold)
-(set-face-attribute 'org-level-4 nil :weight 'bold)
-
-(define-key org-mode-map (kbd "C-<tab>") nil)
-
-(require 'server)
-(unless (server-running-p)
-  (server-start))
-(global-set-key (kbd "C-x C-c") 'save-buffers-kill-emacs)
-
-(set-frame-parameter (selected-frame) 'fullscreen 'fullboth)
-(add-to-list 'default-frame-alist '(fullscreen . fullboth))
+(ysd-require 'flycheck)
+(ysd-require 'eglot)
 
 (setq-default
- ring-bell-function 'ignore
- company-idle-delay 0.1
- cursor-type '(bar . 4)
- initial-buffer-choice 'ysd-startup-screen
+ c-basic-offset 4
+ c-indentation-style "linux") ;; THis seems to be overwritten when the mode loads
+
+(ryo-modal-major-mode-keys
+ 'c++-mode
+ ("v" origami-toggle-node)
+ ("V"
+  (("i" ysd-origami-close-children)
+   ("k" ysd-origami-open-children)
+   ("I" ysd-origami-close-all-top-level-nodes)
+   ("K" ysd-origami-open-all-top-level-nodes))))
+
+(ryo-modal-major-mode-keys
+ 'c-mode
+ ("v" origami-toggle-node)
+ ("V"
+  (("i" ysd-origami-close-children)
+   ("k" ysd-origami-open-children)
+   ("I" ysd-origami-close-all-top-level-nodes)
+   ("K" ysd-origami-open-all-top-level-nodes))))
+
+(push (cons '(c-mode c-ts-mode c++-mode c++-ts-mode)
+			(eglot-alternatives
+			 '("ccls" "clangd")))
+	  eglot-server-programs)
+
+(defun setup-c++-mode ()
+  (interactive)
+  (setq
+   c-basic-offset tab-width
+   c-indentation-style "linux")
+  (electric-pair-mode 1)
+  (company-mode 1)
+  (eglot-ensure))
+
+(add-hook 'c++-ts-mode-hook 'setup-c++-mode)
+(add-hook 'c++-mode-hook 'setup-c++-mode)
+(add-hook 'c-mode-hook 'setup-c++-mode)
+
+
+
+
+
+(ysd-require 'vterm)
+(define-key vterm-mode-map (kbd "<f1>") nil)
+(define-key vterm-mode-map (kbd "C-c <f1>") 'vterm--self-insert)
+(define-key vterm-mode-map (kbd "C-b") nil)
+(define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
+
+(add-hook 'dired-mode-hook #'dired-hide-details-mode)
+(keymap-set dired-mode-map "i" 'dired-previous-line)
+(keymap-set dired-mode-map "k" 'dired-next-line)
+(keymap-set dired-mode-map "?" 'which-key-show-top-level)
+(keymap-set dired-mode-map "m" 'dired-do-rename)
+(keymap-set dired-mode-map "c" 'dired-do-copy)
+
+;; Set up llm package
+(ysd-require 'llm)
+(require 'llm-openai)
+(setq llm-warn-on-nonfree nil
+	  llm-provider-groq (make-llm-openai-compatible
+						 :url "https://api.groq.com/openai/v1"
+						 :key groq-api-key
+						 :chat-model "llama-3.3-70b-versatile"))
+
+(defun remove-first-and-last-line (str)
+  "Remove the first and last lines of the given string STR."
+  (let ((lines (split-string str "\n" t)))
+	(when ( > (length lines) 2)
+	  (mapconcat 'identity (cdr (butlast lines)) "\n"))))
+
+(defun ysd-llm-generate-code ()
+  (interactive)
+  (let* ((start (if (use-region-p) (region-beginning) (line-beginning-position)))
+		(end (if (use-region-p) (region-end) (line-end-position)))
+		(prompt (string-trim (buffer-substring start end))))
+	(if (string= prompt "")
+		(setq prompt (read-string "Enter Prompt: "))
+	  (delete-region start end))
+	(insert (llm-chat
+			 llm-provider-groq
+			 (llm-make-chat-prompt prompt :context "Respond with only code")))))
+(ryo-modal-key "!" 'ysd-llm-generate-code)
+
+;; Set default variables
+(setq-default
+ cursor-type '(bar . 2)
  line-number-mode t
+ column-number-mode t
  mouse-wheel-progressive-speed nil
- org-blank-before-new-entry '((heading . t) (plain-list-item))
- org-bullets-bullet-list '(" ")
- org-bullets-face-name 'fixed-pitch
- org-ellipsis " ▾"
- org-special-ctrl-a/e t
- show-paren-mode t
  truncate-lines t
- which-key-mode t
+ show-trailing-whitespace t
  create-lockfiles nil
  auto-save-default nil
- make-backup-files nil)
+ make-backup-files nil
+ ring-bell-function 'ignore)
+
+;; Set global minor modes
 (tool-bar-mode -1)
 (menu-bar-mode -1)
 (scroll-bar-mode -1)
+(show-paren-mode 1)
+
+;; Set fullscreen
+;; TODO: make fullscreen startup a 'customize' option
+(add-to-list 'default-frame-alist '(internal-border-width . 24))
+(add-to-list 'default-frame-alist '(alpha-background . 70))
+
+(setq custom-file (concat user-emacs-directory "custom.el"))
+(if (file-exists-p custom-file) (load custom-file))
