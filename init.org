@@ -652,11 +652,16 @@ Map existing major modes to their ts-mode counterparts
 A fork of ts-fold
 
 #+begin_src emacs-lisp
-  (require 'treesit-fold) ;; Done without ysd-require because it is downloaded through git to site-lisp
+  (defun treesit-fold-setup ()
 
-  (ryo-modal-major-mode-keys
-   'treesit-fold-mode
-   ("<tab>" treesit-fold-toggle))
+	(require 'treesit-fold) ;; Done without ysd-require because it is downloaded through git to site-lisp
+	(ryo-modal-major-mode-keys
+	 'treesit-fold-mode
+	 ("<tab>" treesit-fold-toggle)))
+
+  (if (not (file-directory-p (locate-user-emacs-file "site-lisp/treesit-fold")))
+	  (message (concat "treesit-fold not installed, you should git clone it into " (locate-user-emacs-file "site-lisp/treesit-fold")))
+	(treesit-fold-setup))
 
 #+end_src
 

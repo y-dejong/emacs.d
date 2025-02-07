@@ -12,6 +12,10 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 	(push package package-selected-packages))
   (require package))
 
+;; Add site-lisp for manually installed packages
+(let ((default-directory (locate-user-emacs-file "site-lisp")))
+  (normal-top-level-add-subdirs-to-load-path))
+
 (setq env-file (locate-user-emacs-file "env.el"))
 (if (file-exists-p env-file) (load env-file))
 
@@ -415,8 +419,9 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 
   ;; Keybinds
   (push 'dashboard-mode ryo-excluded-modes)
-  (keymap-set dashboard-mode-map (kbd "i") 'previous-line)
-  (keymap-set dashboard-mode-map (kbd "k") 'next-line)
+  (keymap-set dashboard-mode-map (kbd "i") 'dashboard-previous-line)
+  (keymap-set dashboard-mode-map (kbd "k") 'dashboard-next-line)
+  (keymap-set dashboard-mode-map (kbd "g") 'dashboard-refresh-buffer)
 
   (setq dashboard-projects-backend 'projectile
 		initial-buffer-choice (lambda () (get-buffer-create dashboard-buffer-name)) ;; Shows dashboard even if launched with emacsclient instead of emacs
@@ -434,7 +439,8 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
   (dashboard-setup-startup-hook))
 
 (add-hook 'dashboard-before-initialize-hook
-		  (lambda() (setq dashboard-startup-banner (get-random-banner))))
+		  (lambda()
+			(setq dashboard-startup-banner (get-random-banner))))
 
 (add-hook 'dashboard-mode-hook
 		  (lambda () (setq-local show-trailing-whitespace nil))) ;; Ruins ASCII art
@@ -468,6 +474,17 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 		(c-mode . c-ts-mode)
 		(c++-mode . c++-ts-mode)
 		(python-mode . python-ts-mode)))
+
+(defun treesit-fold-setup ()
+
+  (require 'treesit-fold) ;; Done without ysd-require because it is downloaded through git to site-lisp
+  (ryo-modal-major-mode-keys
+   'treesit-fold-mode
+   ("<tab>" treesit-fold-toggle)))
+
+(if (not (file-directory-p (locate-user-emacs-file "site-lisp/treesit-fold")))
+	(message (concat "treesit-fold not installed, you should git clone it into " (locate-user-emacs-file "site-lisp/treesit-fold")))
+  (treesit-fold-setup))
 
 (ysd-require 'typescript-mode)
 (ysd-require 'tide)
@@ -517,6 +534,7 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
    c-basic-offset tab-width
    c-ts-indent-offset tab-width
    c-indentation-style "linux")
+  (treesit-fold-mode 1)
   (electric-pair-mode 1)
   (company-mode 1)
   (eglot-ensure))
@@ -531,6 +549,15 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (define-key vterm-mode-map (kbd "C-c <escape>") 'vterm--self-insert)
 (define-key vterm-mode-map (kbd "C-b") nil)
 (define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
+
+(ysd-require 'magit)
+
+(keymap-set magit-status-mode-map (kbd "i") 'magit-previous-line)
+(keymap-set magit-status-mode-map (kbd "k") 'magit-next-line)
+(keymap-set magit-status-mode-map (kbd "I") 'magit-gitignore)
+(keymap-set magit-status-mode-map (kbd "K") 'magit-discard)
+(keymap-unset magit-status-mode-map "C-<tab>")
+(push 'magit-status-mode ryo-excluded-modes)
 
 (setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
 
