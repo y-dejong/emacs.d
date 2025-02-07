@@ -8,19 +8,23 @@
 Add Melpa as a source for packages, and define a version of =require= that installs a package if it is missing.
 
 #+begin_src emacs-lisp
-	(require 'package)
-	(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+  (require 'package)
+  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 
-	(defun ysd-require (package &optional min-version no-refresh)
-	  "Ask elpa to install given PACKAGE with MIN-VERSION.
-	If NO-REFRESH is nil, `package-refresh-contents' is called."
-	  (unless (package-installed-p package min-version)
-		(message "Missing package: %s" package)
-		(unless (or (assoc package package-archive-contents) no-refresh)
-	  (package-refresh-contents))
-		(package-install package)
-		(push package package-selected-packages))
-	  (require package))
+  (defun ysd-require (package &optional min-version no-refresh)
+	"Ask elpa to install given PACKAGE with MIN-VERSION.
+  If NO-REFRESH is nil, `package-refresh-contents' is called."
+	(unless (package-installed-p package min-version)
+	  (message "Missing package: %s" package)
+	  (unless (or (assoc package package-archive-contents) no-refresh)
+	(package-refresh-contents))
+	  (package-install package)
+	  (push package package-selected-packages))
+	(require package))
+
+  ;; Add site-lisp for manually installed packages
+  (let ((default-directory (locate-user-emacs-file "site-lisp")))
+	(normal-top-level-add-subdirs-to-load-path))
 #+end_src
 
 Load environment variables
@@ -643,68 +647,17 @@ Map existing major modes to their ts-mode counterparts
 #+end_src
 
 ** Folding
-Setup code folding with origami. Add a few functions that make it easier to fold all blocks at the same level, e.g. all functions in a class or all classes in a file.
 
-TODO: Use tree-sitter
+*** Treesit-fold
+A fork of ts-fold
 
-#+begin_src emacs-lisp :tangle no
-  (ysd-require 'origami)
+#+begin_src emacs-lisp
+  (require 'treesit-fold) ;; Done without ysd-require because it is downloaded through git to site-lisp
 
-  (defun ysd-origami-close-all-top-level-nodes (buffer)
-	(interactive (list (current-buffer)))
-	(-when-let (tree (origami-get-fold-tree buffer))
-	  (origami-apply-new-tree
-	   buffer tree (origami-store-cached-tree
-					buffer
-					(origami-fold-children-set
-					 tree
-					 (-map (lambda (node) (origami-fold-open-set node nil))
-						   (origami-fold-children tree)))))))
+  (ryo-modal-major-mode-keys
+   'treesit-fold-mode
+   ("<tab>" treesit-fold-toggle))
 
-  (defun ysd-origami-open-all-top-level-nodes (buffer)
-	(interactive (list (current-buffer)))
-	(-when-let (tree (origami-get-fold-tree buffer))
-	  (origami-apply-new-tree
-	   buffer tree (origami-store-cached-tree
-					buffer
-					(origami-fold-children-set
-					 tree
-					 (-map (lambda (node) (origami-fold-open-set node t))
-						   (origami-fold-children tree)))))))
-
-  (defun ysd-origami-close-children (buffer point)
-	(interactive (list (current-buffer) (point)))
-	(when-let ((tree (origami-get-fold-tree buffer))
-			   (path (origami-fold-find-path-containing tree point)))
-		(origami-apply-new-tree
-		 buffer tree (origami-store-cached-tree
-					  buffer
-					  (origami-fold-assoc
-					   path
-					   (lambda (parent)
-						 (origami-fold-children-set
-						  parent
-						  (-map (lambda (node) (origami-fold-open-set node nil))
-								(origami-fold-children parent)))))))))
-
-  (defun ysd-origami-open-children (buffer point)
-	(interactive (list (current-buffer) (point)))
-	(when-let ((tree (origami-get-fold-tree buffer))
-			   (path (origami-fold-find-path-containing tree point)))
-		(origami-apply-new-tree
-		 buffer tree (origami-store-cached-tree
-					  buffer
-					  (origami-fold-assoc
-					   path
-					   (lambda (parent)
-						 (origami-fold-children-set
-						  parent
-						  (-map (lambda (node) (origami-fold-open-set node t))
-								(origami-fold-children parent)))))))))
-
-  (add-hook 'origami-mode
-		(lambda ()
-		  (ryo-modal-key "v" 'origami-toggle-node)))
 #+end_src
 
 TODO: Create a general development setup function that is hooked to all development modes, includes basic setup for company, electric pair, eglot? treemacs, others
@@ -768,6 +721,7 @@ Need to resolve the debate over eglot vs lsp-mode, main thing affecting my decis
 	 c-basic-offset tab-width
 	 c-ts-indent-offset tab-width
 	 c-indentation-style "linux")
+	(treesit-fold-mode 1)
 	(electric-pair-mode 1)
 	(company-mode 1)
 	(eglot-ensure))
@@ -786,6 +740,20 @@ Use vterm
   (define-key vterm-mode-map (kbd "C-c <escape>") 'vterm--self-insert)
   (define-key vterm-mode-map (kbd "C-b") nil)
   (define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
+#+end_src
+
+** Magit
+
+#+begin_src emacs-lisp
+  (ysd-require 'magit)
+
+  (keymap-set magit-status-mode-map (kbd "i") 'magit-previous-line)
+  (keymap-set magit-status-mode-map (kbd "k") 'magit-next-line)
+  (keymap-set magit-status-mode-map (kbd "I") 'magit-gitignore)
+  (keymap-set magit-status-mode-map (kbd "K") 'magit-discard)
+  (keymap-unset magit-status-mode-map "C-<tab>")
+  (push 'magit-status-mode ryo-excluded-modes)
+
 #+end_src
 
 * Org Mode

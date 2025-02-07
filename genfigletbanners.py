@@ -79,7 +79,7 @@ def main():
     if args.no_download:
         fonts = [os.path.splitext(filename)[0] for filename in os.listdir("startup-banners/fonts")]
     else:
-        fonts = scrape_font_options()[:100]
+        fonts = scrape_font_options()
         print("Got font options")
         print(fonts)
         download_fonts(fonts)
