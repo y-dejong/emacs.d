@@ -9,10 +9,11 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 	(unless (or (assoc package package-archive-contents) no-refresh)
   (package-refresh-contents))
 	(package-install package)
-	(push package 'package-selected-packages))
+	(push package package-selected-packages))
   (require package))
 
-(load "~/.emacs.d/env.el")
+(setq env-file (locate-user-emacs-file "env.el"))
+(if (file-exists-p env-file) (load env-file))
 
 (defun ysd-kill-region-or-line (&optional beg end)
   "Kill region if active, otherwise, kill whole line."
@@ -59,7 +60,7 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 
 (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore) ;; Make all letters/etc. do nothing
 
-(global-set-key (kbd "<f1>") 'ryo-modal-mode)
+(global-set-key (kbd "<escape>") 'ryo-modal-mode)
 
 (ryo-modal-keys
  ("i" previous-line)
@@ -80,6 +81,8 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
  ("y" ysd-yank)
  ("z" undo)
  ("Z" undo-redo)
+ ("g" goto-map)
+ (";" comment-line)
  ("SPC" set-mark-command))
 
 (global-set-key (kbd "C-<tab>") 'other-window) ;; TODO Adapt for terminal interface
@@ -380,6 +383,65 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 
 (global-set-key (kbd "C-e") 'treemacs)
 
+(add-hook 'dired-mode-hook #'dired-hide-details-mode)
+(keymap-set dired-mode-map "i" 'dired-previous-line)
+(keymap-set dired-mode-map "k" 'dired-next-line)
+(keymap-set dired-mode-map "?" 'which-key-show-top-level)
+(keymap-set dired-mode-map "m" 'dired-do-rename)
+(keymap-set dired-mode-map "c" 'dired-do-copy)
+
+(defun get-random-banner ()
+  "Get random banner from startup-banners"
+  (let ((startup-banners-dir (locate-user-emacs-file "startup-banners")))
+	(if (file-directory-p startup-banners-dir)
+		(let ((files (cl-remove-if-not (lambda (file) (string= (file-name-extension file) "txt"))
+										   (directory-files startup-banners-dir))))
+		  (concat (file-name-as-directory startup-banners-dir) (nth (random (length files)) files)))
+	  (message "Startup banners dir not found")
+	  'logo)))
+
+(when (display-graphic-p)
+  (ysd-require 'all-the-icons))
+
+(setq dashboard-set-heading-icons t) ;; Workaround, icons won't load unless this is set before the require
+(ysd-require 'dashboard)
+
+;; Download a cooler emacs logo
+(setq dashboard-logo-file (locate-user-emacs-file "gnu_color.svg"))
+(unless (file-exists-p dashboard-logo-file)
+  (url-copy-file "https://raw.githubusercontent.com/egstatsml/emacs_fancy_logos/refs/heads/main/gnu_color.svg" dashboard-logo-file))
+
+(defun ysd-init-dashboard ()
+
+  ;; Keybinds
+  (push 'dashboard-mode ryo-excluded-modes)
+  (keymap-set dashboard-mode-map (kbd "i") 'previous-line)
+  (keymap-set dashboard-mode-map (kbd "k") 'next-line)
+
+  (setq dashboard-projects-backend 'projectile
+		initial-buffer-choice (lambda () (get-buffer-create dashboard-buffer-name)) ;; Shows dashboard even if launched with emacsclient instead of emacs
+		dashboard-banner-logo-title "Yasper's Emacs"
+		dashboard-startup-banner (get-random-banner)
+		dashboard-center-content t
+		dashboard-set-file-icons t
+		dashboard-projects-show-base t
+		dashboard-projects-item-format "%s"
+		dashboard-icon-type 'all-the-icons
+		dashboard-projects-switch-function 'counsel-projectile-switch-project-by-name
+		dashboard-items '((projects . 10)
+						  (bookmarks . 5)
+						  (recents . 5)))
+  (dashboard-setup-startup-hook))
+
+(add-hook 'dashboard-before-initialize-hook
+		  (lambda() (setq dashboard-startup-banner (get-random-banner))))
+
+(add-hook 'dashboard-mode-hook
+		  (lambda () (setq-local show-trailing-whitespace nil))) ;; Ruins ASCII art
+
+
+(ysd-init-dashboard)
+
 (ysd-require 'company)
 (keymap-set company-active-map "C-k" 'company-select-next-or-abort)
 (keymap-set company-active-map "C-k" 'company-select-previous-or-abort)
@@ -406,64 +468,6 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 		(c-mode . c-ts-mode)
 		(c++-mode . c++-ts-mode)
 		(python-mode . python-ts-mode)))
-
-(ysd-require 'origami)
-
-(defun ysd-origami-close-all-top-level-nodes (buffer)
-  (interactive (list (current-buffer)))
-  (-when-let (tree (origami-get-fold-tree buffer))
-	(origami-apply-new-tree
-	 buffer tree (origami-store-cached-tree
-				  buffer
-				  (origami-fold-children-set
-				   tree
-				   (-map (lambda (node) (origami-fold-open-set node nil))
-						 (origami-fold-children tree)))))))
-
-(defun ysd-origami-open-all-top-level-nodes (buffer)
-  (interactive (list (current-buffer)))
-  (-when-let (tree (origami-get-fold-tree buffer))
-	(origami-apply-new-tree
-	 buffer tree (origami-store-cached-tree
-				  buffer
-				  (origami-fold-children-set
-				   tree
-				   (-map (lambda (node) (origami-fold-open-set node t))
-						 (origami-fold-children tree)))))))
-
-(defun ysd-origami-close-children (buffer point)
-  (interactive (list (current-buffer) (point)))
-  (when-let ((tree (origami-get-fold-tree buffer))
-			 (path (origami-fold-find-path-containing tree point)))
-	  (origami-apply-new-tree
-	   buffer tree (origami-store-cached-tree
-					buffer
-					(origami-fold-assoc
-					 path
-					 (lambda (parent)
-					   (origami-fold-children-set
-						parent
-						(-map (lambda (node) (origami-fold-open-set node nil))
-							  (origami-fold-children parent)))))))))
-
-(defun ysd-origami-open-children (buffer point)
-  (interactive (list (current-buffer) (point)))
-  (when-let ((tree (origami-get-fold-tree buffer))
-			 (path (origami-fold-find-path-containing tree point)))
-	  (origami-apply-new-tree
-	   buffer tree (origami-store-cached-tree
-					buffer
-					(origami-fold-assoc
-					 path
-					 (lambda (parent)
-					   (origami-fold-children-set
-						parent
-						(-map (lambda (node) (origami-fold-open-set node t))
-							  (origami-fold-children parent)))))))))
-
-(add-hook 'origami-mode
-	  (lambda ()
-		(ryo-modal-key "v" 'origami-toggle-node)))
 
 (ysd-require 'typescript-mode)
 (ysd-require 'tide)
@@ -499,28 +503,10 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (ysd-require 'eglot)
 
 (setq-default
- c-basic-offset 4
+ c-ts-indent-offset tab-width
  c-indentation-style "linux") ;; THis seems to be overwritten when the mode loads
 
-(ryo-modal-major-mode-keys
- 'c++-mode
- ("v" origami-toggle-node)
- ("V"
-  (("i" ysd-origami-close-children)
-   ("k" ysd-origami-open-children)
-   ("I" ysd-origami-close-all-top-level-nodes)
-   ("K" ysd-origami-open-all-top-level-nodes))))
-
-(ryo-modal-major-mode-keys
- 'c-mode
- ("v" origami-toggle-node)
- ("V"
-  (("i" ysd-origami-close-children)
-   ("k" ysd-origami-open-children)
-   ("I" ysd-origami-close-all-top-level-nodes)
-   ("K" ysd-origami-open-all-top-level-nodes))))
-
-(push (cons '(c-mode c-ts-mode c++-mode c++-ts-mode)
+(push (cons '(c-mode c-ts-mode c++-mode c++-ts-mode) ;; Use ccls over clangd
 			(eglot-alternatives
 			 '("ccls" "clangd")))
 	  eglot-server-programs)
@@ -529,31 +515,24 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
   (interactive)
   (setq
    c-basic-offset tab-width
+   c-ts-indent-offset tab-width
    c-indentation-style "linux")
   (electric-pair-mode 1)
   (company-mode 1)
   (eglot-ensure))
 
 (add-hook 'c++-ts-mode-hook 'setup-c++-mode)
+(add-hook 'c-ts-mode-hook 'setup-c++-mode)
 (add-hook 'c++-mode-hook 'setup-c++-mode)
 (add-hook 'c-mode-hook 'setup-c++-mode)
 
-
-
-
-
 (ysd-require 'vterm)
-(define-key vterm-mode-map (kbd "<f1>") nil)
-(define-key vterm-mode-map (kbd "C-c <f1>") 'vterm--self-insert)
+(define-key vterm-mode-map (kbd "<escape>") nil)
+(define-key vterm-mode-map (kbd "C-c <escape>") 'vterm--self-insert)
 (define-key vterm-mode-map (kbd "C-b") nil)
 (define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
 
-(add-hook 'dired-mode-hook #'dired-hide-details-mode)
-(keymap-set dired-mode-map "i" 'dired-previous-line)
-(keymap-set dired-mode-map "k" 'dired-next-line)
-(keymap-set dired-mode-map "?" 'which-key-show-top-level)
-(keymap-set dired-mode-map "m" 'dired-do-rename)
-(keymap-set dired-mode-map "c" 'dired-do-copy)
+(setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
 
 ;; Set up llm package
 (ysd-require 'llm)
@@ -607,5 +586,5 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (add-to-list 'default-frame-alist '(internal-border-width . 24))
 (add-to-list 'default-frame-alist '(alpha-background . 70))
 
-(setq custom-file (concat user-emacs-directory "custom.el"))
+(setq custom-file (locate-user-emacs-file "custom.el"))
 (if (file-exists-p custom-file) (load custom-file))

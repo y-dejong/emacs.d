@@ -19,13 +19,14 @@ Add Melpa as a source for packages, and define a version of =require= that insta
 		(unless (or (assoc package package-archive-contents) no-refresh)
 	  (package-refresh-contents))
 		(package-install package)
-		(push package 'package-selected-packages))
+		(push package package-selected-packages))
 	  (require package))
 #+end_src
 
 Load environment variables
 #+begin_src emacs-lisp
-  (load "~/.emacs.d/env.el")
+  (setq env-file (locate-user-emacs-file "env.el"))
+  (if (file-exists-p env-file) (load env-file))
 #+end_Src
 
 * Custom Functions
@@ -93,7 +94,7 @@ Custom modal setup
 
   (define-key ryo-modal-mode-map [remap self-insert-command] 'ignore) ;; Make all letters/etc. do nothing
 
-  (global-set-key (kbd "<f1>") 'ryo-modal-mode)
+  (global-set-key (kbd "<escape>") 'ryo-modal-mode)
 
   (ryo-modal-keys
    ("i" previous-line)
@@ -497,7 +498,7 @@ Diminish certain modes so they don't take up space on the header line
 	  (diminish mode)))
 #+end_src
 
-* Development
+* Project and File Management
 ** Project Management
 *** Projectile
 Use projectile to manage projects
@@ -521,6 +522,80 @@ Use projectile to manage projects
   (global-set-key (kbd "C-e") 'treemacs)
 #+end_src
 
+** Dired
+
+#+begin_src emacs-lisp
+  (add-hook 'dired-mode-hook #'dired-hide-details-mode)
+  (keymap-set dired-mode-map "i" 'dired-previous-line)
+  (keymap-set dired-mode-map "k" 'dired-next-line)
+  (keymap-set dired-mode-map "?" 'which-key-show-top-level)
+  (keymap-set dired-mode-map "m" 'dired-do-rename)
+  (keymap-set dired-mode-map "c" 'dired-do-copy)
+#+end_src
+
+* Dashboard
+
+Figlet to produce the emacs banner (ASCCI Art generator)
+#+begin_src emacs-lisp
+  (defun get-random-banner ()
+	"Get random banner from startup-banners"
+	(let ((startup-banners-dir (locate-user-emacs-file "startup-banners")))
+	  (if (file-directory-p startup-banners-dir)
+		  (let ((files (cl-remove-if-not (lambda (file) (string= (file-name-extension file) "txt"))
+											 (directory-files startup-banners-dir))))
+			(concat (file-name-as-directory startup-banners-dir) (nth (random (length files)) files)))
+		(message "Startup banners dir not found")
+		'logo)))
+#+end_src
+
+Dashboard.el implementation
+#+begin_src emacs-lisp
+  (when (display-graphic-p)
+	(ysd-require 'all-the-icons))
+
+  (setq dashboard-set-heading-icons t) ;; Workaround, icons won't load unless this is set before the require
+  (ysd-require 'dashboard)
+
+  ;; Download a cooler emacs logo
+  (setq dashboard-logo-file (locate-user-emacs-file "gnu_color.svg"))
+  (unless (file-exists-p dashboard-logo-file)
+	(url-copy-file "https://raw.githubusercontent.com/egstatsml/emacs_fancy_logos/refs/heads/main/gnu_color.svg" dashboard-logo-file))
+
+  (defun ysd-init-dashboard ()
+
+	;; Keybinds
+	(push 'dashboard-mode ryo-excluded-modes)
+	(keymap-set dashboard-mode-map (kbd "i") 'dashboard-previous-line)
+	(keymap-set dashboard-mode-map (kbd "k") 'dashboard-next-line)
+	(keymap-set dashboard-mode-map (kbd "g") 'dashboard-refresh-buffer)
+
+	(setq dashboard-projects-backend 'projectile
+		  initial-buffer-choice (lambda () (get-buffer-create dashboard-buffer-name)) ;; Shows dashboard even if launched with emacsclient instead of emacs
+		  dashboard-banner-logo-title "Yasper's Emacs"
+		  dashboard-startup-banner (get-random-banner)
+		  dashboard-center-content t
+		  dashboard-set-file-icons t
+		  dashboard-projects-show-base t
+		  dashboard-projects-item-format "%s"
+		  dashboard-icon-type 'all-the-icons
+		  dashboard-projects-switch-function 'counsel-projectile-switch-project-by-name
+		  dashboard-items '((projects . 10)
+							(bookmarks . 5)
+							(recents . 5)))
+	(dashboard-setup-startup-hook))
+
+  (add-hook 'dashboard-before-initialize-hook
+			(lambda()
+			  (setq dashboard-startup-banner (get-random-banner))))
+
+  (add-hook 'dashboard-mode-hook
+			(lambda () (setq-local show-trailing-whitespace nil))) ;; Ruins ASCII art
+
+
+  (ysd-init-dashboard)
+#+end_src
+
+* Development
 ** Autocomplete (Company)
 #+begin_src emacs-lisp
   (ysd-require 'company)
@@ -572,7 +647,7 @@ Setup code folding with origami. Add a few functions that make it easier to fold
 
 TODO: Use tree-sitter
 
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
   (ysd-require 'origami)
 
   (defun ysd-origami-close-all-top-level-nodes (buffer)
@@ -682,24 +757,6 @@ Need to resolve the debate over eglot vs lsp-mode, main thing affecting my decis
    c-ts-indent-offset tab-width
    c-indentation-style "linux") ;; THis seems to be overwritten when the mode loads
 
-  (ryo-modal-major-mode-keys
-   'c++-mode
-   ("v" origami-toggle-node)
-   ("V"
-	(("i" ysd-origami-close-children)
-	 ("k" ysd-origami-open-children)
-	 ("I" ysd-origami-close-all-top-level-nodes)
-	 ("K" ysd-origami-open-all-top-level-nodes))))
-
-  (ryo-modal-major-mode-keys
-   'c-mode
-   ("v" origami-toggle-node)
-   ("V"
-	(("i" ysd-origami-close-children)
-	 ("k" ysd-origami-open-children)
-	 ("I" ysd-origami-close-all-top-level-nodes)
-	 ("K" ysd-origami-open-all-top-level-nodes))))
-
   (push (cons '(c-mode c-ts-mode c++-mode c++-ts-mode) ;; Use ccls over clangd
 			  (eglot-alternatives
 			   '("ccls" "clangd")))
@@ -716,6 +773,7 @@ Need to resolve the debate over eglot vs lsp-mode, main thing affecting my decis
 	(eglot-ensure))
 
   (add-hook 'c++-ts-mode-hook 'setup-c++-mode)
+  (add-hook 'c-ts-mode-hook 'setup-c++-mode)
   (add-hook 'c++-mode-hook 'setup-c++-mode)
   (add-hook 'c-mode-hook 'setup-c++-mode)
 #+end_src
@@ -724,21 +782,15 @@ Need to resolve the debate over eglot vs lsp-mode, main thing affecting my decis
 Use vterm
 #+begin_src emacs-lisp
   (ysd-require 'vterm)
-  (define-key vterm-mode-map (kbd "<f1>") nil)
-  (define-key vterm-mode-map (kbd "C-c <f1>") 'vterm--self-insert)
+  (define-key vterm-mode-map (kbd "<escape>") nil)
+  (define-key vterm-mode-map (kbd "C-c <escape>") 'vterm--self-insert)
   (define-key vterm-mode-map (kbd "C-b") nil)
   (define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
 #+end_src
 
-** Dired
-
+* Org Mode
 #+begin_src emacs-lisp
-  (add-hook 'dired-mode-hook #'dired-hide-details-mode)
-  (keymap-set dired-mode-map "i" 'dired-previous-line)
-  (keymap-set dired-mode-map "k" 'dired-next-line)
-  (keymap-set dired-mode-map "?" 'which-key-show-top-level)
-  (keymap-set dired-mode-map "m" 'dired-do-rename)
-  (keymap-set dired-mode-map "c" 'dired-do-copy)
+  (setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
 #+end_src
 
 * Miscellaneous
@@ -811,7 +863,7 @@ Most of these settings can probably be handled in customize instead of init.el, 
 Variables set using =customize= will be read from the "custom.el" file, which is ignored by git. This allows user-set variables to be machine local.
 
 #+begin_src emacs-lisp
-  (setq custom-file (concat user-emacs-directory "custom.el"))
+  (setq custom-file (locate-user-emacs-file "custom.el"))
   (if (file-exists-p custom-file) (load custom-file))
 #+end_src
 
