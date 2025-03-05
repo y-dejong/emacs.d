@@ -92,7 +92,7 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (global-set-key (kbd "C-<tab>") 'other-window) ;; TODO Adapt for terminal interface
 
 (setq ryo-excluded-modes
-  '(eshell-mode dired-mode treemacs-mode vterm-mode inferior-python-mode))
+  '(eshell-mode dired-mode treemacs-mode vterm-mode inferior-python-mode ediff-mode))
 
 (add-hook 'window-selection-change-functions
 	  (lambda (buf) (interactive)
@@ -544,6 +544,14 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (add-hook 'c++-mode-hook 'setup-c++-mode)
 (add-hook 'c-mode-hook 'setup-c++-mode)
 
+(ysd-require 'lsp-pyright)
+
+(defun setup-python-mode ()
+  (eglot-ensure)
+  (company-mode 1))
+
+(add-hook 'python-ts-mode-hook 'setup-python-mode)
+
 (ysd-require 'vterm)
 (define-key vterm-mode-map (kbd "<escape>") nil)
 (define-key vterm-mode-map (kbd "C-c <escape>") 'vterm--self-insert)
@@ -552,6 +560,7 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 
 (ysd-require 'magit)
 
+(setq magit-auto-revert-mode 0)
 (keymap-set magit-status-mode-map (kbd "i") 'magit-previous-line)
 (keymap-set magit-status-mode-map (kbd "k") 'magit-next-line)
 (keymap-set magit-status-mode-map (kbd "I") 'magit-gitignore)
@@ -559,35 +568,134 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 (keymap-unset magit-status-mode-map "C-<tab>")
 (push 'magit-status-mode ryo-excluded-modes)
 
-(setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
+(ysd-require 'gptel)
+(require 'gptel-context)
 
-;; Set up llm package
-(ysd-require 'llm)
-(require 'llm-openai)
-(setq llm-warn-on-nonfree nil
-	  llm-provider-groq (make-llm-openai-compatible
-						 :url "https://api.groq.com/openai/v1"
-						 :key groq-api-key
-						 :chat-model "llama-3.3-70b-versatile"))
+(gptel-make-openai "Groq"
+  :host "api.groq.com"
+  :endpoint "/openai/v1/chat/completions"
+  :stream t
+  :key groq-api-key ;; Assumes variable has been set by env.el
+  :models '(llama-3.3-70b-versatile
+			llama-3.3-8b-instant
+			qwen-2.5-coder-32b
+			deepseek-r1-distill-llama-70b))
 
-(defun remove-first-and-last-line (str)
-  "Remove the first and last lines of the given string STR."
-  (let ((lines (split-string str "\n" t)))
-	(when ( > (length lines) 2)
-	  (mapconcat 'identity (cdr (butlast lines)) "\n"))))
+(gptel-make-openai "OpenRouter"
+  :host "openrouter.ai"
+  :endpoint "/api/v1/chat/completions"
+  :stream t
+  :key openrouter-api-key ;; Assumes variable has been set by env.el
+  :models '(google/gemini-2.0-flash-001
+			deepseek/deepseek-r1:free
+			qwen/qwen-2.5-coder-32b-instruct))
 
-(defun ysd-llm-generate-code ()
+(push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
+(push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)
+
+(setq gptel-backend (gptel-get-backend "OpenRouter")
+	  gptel-model 'qwen/qwen-2.5-coder-32b-instruct
+	  gptel-use-header-line nil
+	  gptel-expert-commands t
+	  gptel-use-context 'user)
+
+(setq-default markdown-hide-markup t) ;; Hides text decoration in gptel buffer
+
+(keymap-set gptel-mode-map "C-<return>" 'gptel-send)
+(defun setup-gptel-mode ()
+  (visual-line-mode 1)
+  (display-line-numbers-mode 0))
+(add-hook 'gptel-mode-hook 'setup-gptel-mode)
+
+(defun ysd-merge-conflict-buffers (old new)
+  "Generate a Git-style merge conflict comparison between OLD and NEW, and output to OUTPUT-BUF."
+  (interactive "bOld Buffer: \nbNew Buffer: ")
+  (let ((file1 (diff-file-local-copy (get-buffer old)))
+		(file2 (diff-file-local-copy (get-buffer new))))
+	(shell-command (format "diff3 -m %s %s %s" file2 file1 file2) (get-buffer-create output-buf))))
+
+(defun find-buffer-with-gptel-mode ()
+  "Find and return the first buffer where `gptel-mode` is enabled.
+If no such buffer is found, return nil."
+  (catch 'found
+	(dolist (buffer (buffer-list))
+	  (with-current-buffer buffer
+		(when gptel-mode
+		  (throw 'found buffer))))))
+
+(defun extract-code-block-backward ()
+  "Extracts text between two lines containing \`\`\`"
   (interactive)
-  (let* ((start (if (use-region-p) (region-beginning) (line-beginning-position)))
-		(end (if (use-region-p) (region-end) (line-end-position)))
-		(prompt (string-trim (buffer-substring start end))))
-	(if (string= prompt "")
-		(setq prompt (read-string "Enter Prompt: "))
-	  (delete-region start end))
-	(insert (llm-chat
-			 llm-provider-groq
-			 (llm-make-chat-prompt prompt :context "Respond with only code")))))
-(ryo-modal-key "!" 'ysd-llm-generate-code)
+  (let (start-pos end-pos)
+	(end-of-buffer)
+	;; Find the first line with ```
+	(if (re-search-backward "^```" nil t)
+		(progn
+		  (previous-line)
+		  (setq end-pos (line-end-position))
+		  ;; Find the second line with ```
+		  (if (re-search-backward "^```" nil t)
+			  (progn
+				(next-line)
+				(setq start-pos (line-beginning-position))
+				;; Extract the content between the two lines
+				(list start-pos end-pos))
+			(message "No second line with ``` found.")))
+		  (message "No line with ``` found."))))
+
+(defun ysd-merge-region-and-gptel-code-block (beg end)
+  "Merge the current region with the most recent gptel code block, and start smerge-mode"
+  (interactive "r")
+  (when (not (use-region-p))
+	(setq beg (point-min)
+		  end (point-max)))
+  (let ((old-file (make-temp-file "buffer-contents-"))
+		(new-file (make-temp-file "buffer-contents-")))
+
+	(write-region beg end old-file)
+	(with-current-buffer (find-buffer-with-gptel-mode)
+	  (apply 'write-region (append (extract-code-block-backward) (list new-file)))) ;; rewrite this line
+	(erase-buffer)
+	(shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
+  (smerge-mode))
+
+(defun ysd-gptel-ask-file (prompt &optional gptel-buffer)
+  (interactive
+   (list
+	(read-string
+	 (format "Ask %s: " (gptel-backend-name gptel-backend))
+	 (and (use-region-p)
+		  (buffer-substring-no-properties
+		   (region-beginning) (region-end))))
+	nil))
+  (unless gptel-buffer
+	(setq gptel-buffer (or
+						(find-buffer-with-gptel-mode)
+						(gptel (format "*%s*" (gptel-backend-name gptel-backend))))))
+  (with-current-buffer gptel-buffer
+	(goto-char (point-max))
+	(insert prompt))
+  (gptel-context-add-file buffer-file-name)
+  (gptel-request prompt
+		:buffer gptel-buffer
+		:position (with-current-buffer gptel-buffer (point-max))
+		:fsm (gptel-make-fsm :handlers gptel-send--handlers)
+		:stream gptel-stream)
+  (unless (get-buffer-window gptel-buffer)
+	(display-buffer gptel-buffer gptel-display-buffer-action))) ;; TODO remove the file from context afterward
+
+(ryo-modal-key "!" 'ysd-gptel-ask-file)
+
+(dolist (pair
+  '(("k" . smerge-next)
+	("i" . smerge-prev)
+	("a" . smerge-keep-upper)
+	("b" . smerge-keep-lower)
+	("B" . smerge-keep-all)
+	("q" . smerge-mode)))
+  (keymap-set smerge-mode-map (car pair) (cdr pair)))
+
+(setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
 
 ;; Set default variables
 (setq-default
