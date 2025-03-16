@@ -782,103 +782,105 @@ Use vterm
 Use GPTel
 
 #+begin_src emacs-lisp
-	(ysd-require 'gptel)
-	(require 'gptel-context)
+  (ysd-require 'gptel)
+  (require 'gptel-context)
 
-	(gptel-make-openai "Groq"
-	  :host "api.groq.com"
-	  :endpoint "/openai/v1/chat/completions"
-	  :stream t
-	  :key groq-api-key ;; Assumes variable has been set by env.el
-	  :models '(llama-3.3-70b-versatile
-				llama-3.3-8b-instant
-				qwen-2.5-coder-32b
-				deepseek-r1-distill-llama-70b))
+  (gptel-make-openai "Groq"
+	:host "api.groq.com"
+	:endpoint "/openai/v1/chat/completions"
+	:stream t
+	:key groq-api-key ;; Assumes variable has been set by env.el
+	:models '(llama-3.3-70b-versatile
+			  llama-3.3-8b-instant
+			  qwen-2.5-coder-32b
+			  deepseek-r1-distill-llama-70b))
 
-	(gptel-make-openai "OpenRouter"
-	  :host "openrouter.ai"
-	  :endpoint "/api/v1/chat/completions"
-	  :stream t
-	  :key openrouter-api-key ;; Assumes variable has been set by env.el
-	  :models '(google/gemini-2.0-flash-001
-				deepseek/deepseek-r1:free
-				qwen/qwen-2.5-coder-32b-instruct
-				anthropic/claude-3.7-sonnet:beta))
+  (gptel-make-openai "OpenRouter"
+	:host "openrouter.ai"
+	:endpoint "/api/v1/chat/completions"
+	:stream t
+	:key openrouter-api-key ;; Assumes variable has been set by env.el
+	:models '(google/gemini-2.0-flash-001
+			  deepseek/deepseek-r1:free
+			  qwen/qwen-2.5-coder-32b-instruct
+			  anthropic/claude-3.7-sonnet:beta))
 
-	(push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
-	(push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)
+  (push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
+  (push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)
 
-	(setq gptel-backend (gptel-get-backend "OpenRouter")
-		  gptel-model 'qwen/qwen-2.5-coder-32b-instruct
-		  gptel-use-header-line nil
-		  gptel-expert-commands t
-		  gptel-use-context 'user)
+  (setq gptel-backend (gptel-get-backend "OpenRouter")
+		gptel-model 'qwen/qwen-2.5-coder-32b-instruct
+		gptel-use-header-line nil
+		gptel-expert-commands t
+		gptel-use-context 'user)
 
-	(setq-default markdown-hide-markup t) ;; Hides text decoration in gptel buffer
+  (setq-default markdown-hide-markup t ;; Hides text decoration in gptel buffer
+				markdown-fontify-code-blocks-natively t)
 
-	(keymap-set gptel-mode-map "C-<return>" 'gptel-send)
-	(defun setup-gptel-mode ()
-	  (visual-line-mode 1)
-	  (display-line-numbers-mode 0))
-	(add-hook 'gptel-mode-hook 'setup-gptel-mode)
+  (keymap-set gptel-mode-map "C-<return>" 'gptel-send)
+  (defun setup-gptel-mode ()
+	(visual-line-mode 1)
+	(display-line-numbers-mode 0))
+  (add-hook 'gptel-mode-hook 'setup-gptel-mode)
 
 #+end_src
 
 Custom function to add code at point
 
 #+begin_src emacs-lisp
-  (defun ysd-merge-conflict-buffers (old new)
-	"Generate a Git-style merge conflict comparison between OLD and NEW, and output to OUTPUT-BUF."
-	(interactive "bOld Buffer: \nbNew Buffer: ")
-	(let ((file1 (diff-file-local-copy (get-buffer old)))
-		  (file2 (diff-file-local-copy (get-buffer new))))
-	  (shell-command (format "diff3 -m %s %s %s" file2 file1 file2) (get-buffer-create output-buf))))
+	(defun ysd-merge-conflict-buffers (old new)
+	  "Generate a Git-style merge conflict comparison between OLD and NEW, and output to OUTPUT-BUF."
+	  (interactive "bOld Buffer: \nbNew Buffer: ")
+	  (let ((file1 (diff-file-local-copy (get-buffer old)))
+			(file2 (diff-file-local-copy (get-buffer new))))
+		(shell-command (format "diff3 -m %s %s %s" file2 file1 file2) (get-buffer-create output-buf))))
 
-  (defun find-buffer-with-gptel-mode ()
-	"Find and return the first buffer where `gptel-mode` is enabled.
-  If no such buffer is found, return nil."
-	(catch 'found
-	  (dolist (buffer (buffer-list))
-		(with-current-buffer buffer
-		  (when gptel-mode
-			(throw 'found buffer))))))
+	(defun find-buffer-with-gptel-mode ()
+	  "Find and return the first buffer where `gptel-mode` is enabled.
+	If no such buffer is found, return nil."
+	  (catch 'found
+		(dolist (buffer (buffer-list))
+		  (with-current-buffer buffer
+			(when gptel-mode
+			  (throw 'found buffer))))))
 
-  (defun extract-code-block-backward ()
-	"Extracts text between two lines containing \`\`\`"
-	(interactive)
-	(let (start-pos end-pos)
-	  (end-of-buffer)
-	  ;; Find the first line with ```
-	  (if (re-search-backward "^```" nil t)
-		  (progn
-			(previous-line)
-			(setq end-pos (line-end-position))
-			;; Find the second line with ```
-			(if (re-search-backward "^```" nil t)
-				(progn
-				  (next-line)
-				  (setq start-pos (line-beginning-position))
-				  ;; Extract the content between the two lines
-				  (list start-pos end-pos))
-			  (message "No second line with ``` found.")))
-			(message "No line with ``` found."))))
+	(defun extract-code-block-backward ()
+	  "Extracts text between two lines containing \`\`\`"
+	  (interactive)
+	  (let (start-pos end-pos)
+		(end-of-buffer)
+		;; Find the first line with ```
+		(if (re-search-backward "^```" nil t)
+			(progn
+			  (previous-line)
+			  (setq end-pos (line-end-position))
+			  ;; Find the second line with ```
+			  (if (re-search-backward "^```" nil t)
+				  (progn
+					(next-line)
+					(setq start-pos (line-beginning-position))
+					;; Extract the content between the two lines
+					(list start-pos end-pos))
+				(message "No second line with ``` found.")))
+			  (message "No line with ``` found."))))
 
-  (defun ysd-merge-region-and-gptel-code-block (beg end)
-	"Merge the current region with the most recent gptel code block, and start smerge-mode"
-	(interactive "r")
-	(when (not (use-region-p))
-	  (setq beg (point-min)
-			end (point-max)))
-	(let ((old-file (make-temp-file "buffer-contents-"))
-		  (new-file (make-temp-file "buffer-contents-")))
+	(defun ysd-merge-region-and-gptel-code-block (beg end)
+	  "Merge the current region with the most recent gptel code block, and start smerge-mode"
+	  (interactive "r")
+	  (when (not (use-region-p))
+		(setq beg (point-min)
+			  end (point-max)))
+	  (let ((old-file (make-temp-file "buffer-contents-"))
+			(new-file (make-temp-file "buffer-contents-")))
 
-	  (write-region beg end old-file)
-	  (with-current-buffer (find-buffer-with-gptel-mode)
-		(apply 'write-region (append (extract-code-block-backward) (list new-file)))) ;; rewrite this line
-	  (if (use-region-p) (erase-buffer)
-	  (shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
-	(smerge-mode))
-
+		(write-region beg end old-file)
+		(with-current-buffer (find-buffer-with-gptel-mode)
+		  (apply 'write-region (append (extract-code-block-backward) (list new-file)))) ;; rewrite this line
+		(if (use-region-p)
+			(delete-region (region-beginning) (region-end))
+		  (erase-buffer))
+		(shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
+	  (smerge-mode))
 #+end_src
 
 Basic invoke functions

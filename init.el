@@ -588,7 +588,8 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
   :key openrouter-api-key ;; Assumes variable has been set by env.el
   :models '(google/gemini-2.0-flash-001
 			deepseek/deepseek-r1:free
-			qwen/qwen-2.5-coder-32b-instruct))
+			qwen/qwen-2.5-coder-32b-instruct
+			anthropic/claude-3.7-sonnet:beta))
 
 (push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
 (push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)
@@ -655,7 +656,9 @@ If no such buffer is found, return nil."
 	(write-region beg end old-file)
 	(with-current-buffer (find-buffer-with-gptel-mode)
 	  (apply 'write-region (append (extract-code-block-backward) (list new-file)))) ;; rewrite this line
-	(erase-buffer)
+	(if (use-region-p)
+		(delete-region (region-beginning) (region-end))
+	  (erase-buffer))
 	(shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
   (smerge-mode))
 
