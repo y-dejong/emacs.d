@@ -42,6 +42,64 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
     (setq kill-ring-yank-pointer kill-ring)
     (yank)))
 
+(defun insert-line-below ()
+  (interactive)
+  (end-of-line)
+  (newline))
+
+(defun beginning-or-indentation ()
+  "Jump to beginning of line after whitespace. Press multiple times
+to move before/after whitespace."
+  (interactive)
+  (cond
+   ((bolp) (forward-to-indentation 0))
+   ((save-excursion (skip-chars-backward " \t") (bolp)) (beginning-of-line))
+   (t (back-to-indentation))))
+
+(defun backward-same-syntax ()
+  (interactive "^") ;; Just added this because it's used in forward-same-syntax and I want to match its behavior
+  (forward-same-syntax -1))
+
+(defun insert-one-char (char)
+  (interactive "c")
+  (insert-char char))
+
+(defun replace-one-char (char)
+  (interactive "c")
+  (delete-char 1)
+  (insert-char char))
+
+;; Stolen from https://www.emacswiki.org/emacs/NavigatingParentheses
+(defun jump-to-paren-match (&optional arg)
+  "Jump to matching parenthesis according to `show-paren-mode'.
+
+  When called with a prefix or EDIT is t, jump to matching
+  parenthesis such that insertion will happen inside the list.
+
+  \(fn &optional EDIT)"
+  (interactive "p")
+  ;; data is either nil or a list of form:
+  ;;     (HERE-BEG HERE-END THERE-BEG THERE-END MISMATCH)
+  (let ((data (show-paren--default))
+		(edit (not (eq arg 1))))
+	(when data
+	  ;; Found a parenthesis
+	  (let* ((here-beg (nth 0 data))
+			 (here-end (nth 1 data))
+			 (there-beg (nth 2 data))
+			 (there-end (nth 3 data))
+			 (mismatch (nth 4 data)))
+		(if (not mismatch)
+			;; At parenthesis with a match
+			(cond ((<= (point) here-beg)  ; at opening
+				   (goto-char there-end)
+				   (if edit (backward-char 1)))
+				  ((goto-char there-beg)  ; at closing
+				   (if edit (forward-char 1)))))))))
+
+;; TODO make ysd-bookmark-push and ysd-bookmark-pop
+;; To make point-to-register and jump-to-register function like the kill ring
+
 (defmacro define-key-with-fallback (keymap key def condition &optional mode)
   "Define key with fallback. Binds KEY to definition DEF in keymap KEYMAP, 
    the binding is active when the CONDITION is true. Otherwise turns MODE off 
@@ -71,22 +129,37 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
  ("k" next-line)
  ("j" backward-char)
  ("l" forward-char)
- ("u" backward-word)
- ("o" forward-word)
+ ("u" backward-same-syntax)
+ ("o" forward-same-syntax)
+ ("U" beginning-of-defun)
+ ("O" end-of-defun)
  ("I" scroll-down-line)
  ("K" scroll-up-line)
- ("J" move-beginning-of-line)
+ ("J" beginning-or-indentation)
  ("L" move-end-of-line)
- ("U" beginning-of-buffer)
- ("O" end-of-buffer)
+ ("<" beginning-of-buffer)
+ (">" end-of-buffer)
+ ("n" insert-line-below)
+ ("w" insert-one-char)
+ ("W" replace-one-char)
  ("r" query-replace)
  ("x" ysd-kill-region-or-line)
  ("c" ysd-copy-region-or-line)
  ("y" ysd-yank)
  ("z" undo)
  ("Z" undo-redo)
- ("g" goto-map)
- (";" comment-line)
+ ("g"
+  (("g" goto-line)
+   ("e"
+	(("p" previous-error)
+	 ("n" next-error)))
+   ("w" avy-goto-word-1)
+   ("m" jump-to-paren-match)))
+ ("b"
+  (("b" point-to-register)
+   ("j" jump-to-register)
+   ("l" counsel-register)))
+ ("/" comment-dwim)
  ("SPC" set-mark-command))
 
 (global-set-key (kbd "C-<tab>") 'other-window) ;; TODO Adapt for terminal interface
@@ -600,7 +673,11 @@ If NO-REFRESH is nil, `package-refresh-contents' is called."
 	  gptel-expert-commands t
 	  gptel-use-context 'user)
 
-(setq-default markdown-hide-markup t) ;; Hides text decoration in gptel buffer
+(add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
+(add-hook 'gptel-post-response-functions 'gptel-end-of-response)
+
+(setq-default markdown-hide-markup t ;; Hides text decoration in gptel buffer
+			  markdown-fontify-code-blocks-natively t)
 
 (keymap-set gptel-mode-map "C-<return>" 'gptel-send)
 (defun setup-gptel-mode ()
