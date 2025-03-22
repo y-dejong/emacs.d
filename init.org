@@ -882,7 +882,8 @@ Use GPTel
 	:models '(llama-3.3-70b-versatile
 			  llama-3.3-8b-instant
 			  qwen-2.5-coder-32b
-			  deepseek-r1-distill-llama-70b))
+			  deepseek-r1-distill-llama-70b
+			  qwen-qwq-32b))
 
   (gptel-make-openai "OpenRouter"
 	:host "openrouter.ai"
@@ -892,7 +893,8 @@ Use GPTel
 	:models '(google/gemini-2.0-flash-001
 			  deepseek/deepseek-r1:free
 			  qwen/qwen-2.5-coder-32b-instruct
-			  anthropic/claude-3.7-sonnet:beta))
+			  anthropic/claude-3.7-sonnet:beta
+			  qwen/qwq-32b:free))
 
   (push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
   (push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)
@@ -993,50 +995,44 @@ Smerge setup
 	(keymap-set smerge-mode-map (car pair) (cdr pair)))
 #+end_src
 
-
 ** Invocations
 
 #+begin_src emacs-lisp
-  (defun ysd-gptel-ask-file (prompt &optional gptel-buffer)
-  (interactive
-   (list
-	;; Get prompt from minibuffer
-	(read-string
-	 (format "Ask %s: " (gptel-backend-name gptel-backend))
-	 (and (use-region-p)
-		  (buffer-substring-no-properties
-		   (region-beginning) (region-end))))
-	nil))
+  (defun ysd-gptel-ask-file (prompt &optional region-text)
+	(interactive (list (read-string "Ask: ")
+					   (when (use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))))
 
-  ;; Get gptel session buffer
-  (unless gptel-buffer
-	(setq gptel-buffer (or
-						(find-buffer-with-gptel-mode)
-						(gptel (format "*%s*" (gptel-backend-name gptel-backend))))))
+	(unless (buffer-live-p ysd-gptel-session-buffer) (gptel ysd-gptel-session-buffer))
+	(gptel-context--add-region (current-buffer) (point-min) (point-max))
 
-  (gptel-context-add-file buffer-file-name)
-  ;; Insert new prompt into gptel session buffer
-  (with-current-buffer gptel-buffer
-	(goto-char (point-max))
-	(insert prompt)
-	(gptel-send))
-  (unless (get-buffer-window gptel-buffer)
-	(display-buffer gptel-buffer gptel-display-buffer-action))) ;; TODO remove the file from context afterward
+
+	(with-current-buffer ysd-gptel-session-buffer
+	  (goto-char (point-max))
+	  (insert prompt)
+
+	  (let ((gptel-context-wrap-function
+			 (if region-text
+				 (lambda (message contexts)
+				   (concat
+					(gptel-context--wrap-default message contexts)
+					"The following text is highlighted:\n"
+					region-text))
+			   gptel-context--wrap-default)))
+		(gptel-send)))
+	(gptel-context-remove)
+	(unless (get-buffer-window ysd-gptel-session-buffer)
+		(display-buffer ysd-gptel-session-buffer gptel-display-buffer-action)))
 
   (defun ysd-gptel-code-at-point (prompt)
 	(interactive (list (read-string "Ask: ")))
-	  (insert "<<USER CURSOR HERE>>")
-	  (gptel-context--add-region (current-buffer) (point-min) (point-max))
-	  (gptel-request prompt
-		:stream t
-		:system "You are a coding assistant inside Emacs. Respond only with code that will be inserted inside the provided text file at the location `<<USER CURSOR HERE>>`. Indent the code properly to be inserted at that point.")
-	  (delete-backward-char (length "<<USER CURSOR HERE>>"))
-	  (gptel-context-remove-all))
+	(insert "<<USER CURSOR HERE>>")
+	(gptel-context--add-region (current-buffer) (point-min) (point-max))
+	(gptel-request prompt
+	  :stream t
+	  :system "You are a coding assistant inside Emacs. Respond only with code that will be inserted inside the provided text file at the location `<<USER CURSOR HERE>>`. Indent the code properly to be inserted at that point.")
+	(delete-backward-char (length "<<USER CURSOR HERE>>"))
+	(gptel-context-remove))
 
-
-  (defun ysd-gptel-ask-file ()
-	(interactive)
-	(gptel-add-file (buffer-file-name)))
 #+end_src
 
 ** Transient
@@ -1103,13 +1099,14 @@ Smerge setup
 		 (interactive)
 		 (setq ysd-gptel-session-buffer (ysd-gptel-choose-session))))]
 	 ["Context"
-	  ("f" "Add File" (lambda () (interactive) (call-interactively #'gptel-add-file)))
+	  ("f" "Add File" gptel-add-file)
 	  ("b" "Add Buffer" (lambda () (interactive) (gptel-add '(4))))
+	  ("r" "Context at point" gptel-add)
 	  ("C" "Clear context" gptel-context-remove-all)]
 	 ["Invoke"
 	  ("p" "Insert code at point" ysd-gptel-code-at-point)
 	  ("c" "Open Chat" (lambda () (interactive) (gptel ysd-gptel-session-buffer nil nil t)))
-	  ("e" "Edit code" ysd-gptel-edit-file)]])
+	  ("a" "Ask about file" ysd-gptel-ask-file)]])
 
   (ryo-modal-key "!" 'ysd-gptel-menu)
 #+end_src
