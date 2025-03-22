@@ -644,6 +644,8 @@ to move before/after whitespace."
 (ysd-require 'gptel)
 (require 'gptel-context)
 
+(setq gptel--known-backends nil)
+
 (gptel-make-openai "Groq"
   :host "api.groq.com"
   :endpoint "/openai/v1/chat/completions"
@@ -684,6 +686,10 @@ to move before/after whitespace."
   (visual-line-mode 1)
   (display-line-numbers-mode 0))
 (add-hook 'gptel-mode-hook 'setup-gptel-mode)
+
+(defun ysd-gptel-context-remove (path)
+  (interactive (list (completing-read "Remove context: " gptel-context--alist)))
+  (setq gptel-context--alist (cl-remove (list path) gptel-context--alist :test #'equal)))
 
 (defun ysd-merge-conflict-buffers (old new)
   "Generate a Git-style merge conflict comparison between OLD and NEW, and output to OUTPUT-BUF."
@@ -739,33 +745,6 @@ If no such buffer is found, return nil."
 	(shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
   (smerge-mode))
 
-(defun ysd-gptel-ask-file (prompt &optional gptel-buffer)
-  (interactive
-   (list
-	(read-string
-	 (format "Ask %s: " (gptel-backend-name gptel-backend))
-	 (and (use-region-p)
-		  (buffer-substring-no-properties
-		   (region-beginning) (region-end))))
-	nil))
-  (unless gptel-buffer
-	(setq gptel-buffer (or
-						(find-buffer-with-gptel-mode)
-						(gptel (format "*%s*" (gptel-backend-name gptel-backend))))))
-  (with-current-buffer gptel-buffer
-	(goto-char (point-max))
-	(insert prompt))
-  (gptel-context-add-file buffer-file-name)
-  (gptel-request prompt
-		:buffer gptel-buffer
-		:position (with-current-buffer gptel-buffer (point-max))
-		:fsm (gptel-make-fsm :handlers gptel-send--handlers)
-		:stream gptel-stream)
-  (unless (get-buffer-window gptel-buffer)
-	(display-buffer gptel-buffer gptel-display-buffer-action))) ;; TODO remove the file from context afterward
-
-(ryo-modal-key "!" 'ysd-gptel-ask-file)
-
 (dolist (pair
   '(("k" . smerge-next)
 	("i" . smerge-prev)
@@ -774,6 +753,117 @@ If no such buffer is found, return nil."
 	("B" . smerge-keep-all)
 	("q" . smerge-mode)))
   (keymap-set smerge-mode-map (car pair) (cdr pair)))
+
+(defun ysd-gptel-ask-file (prompt &optional gptel-buffer)
+(interactive
+ (list
+  ;; Get prompt from minibuffer
+  (read-string
+   (format "Ask %s: " (gptel-backend-name gptel-backend))
+   (and (use-region-p)
+		(buffer-substring-no-properties
+		 (region-beginning) (region-end))))
+  nil))
+
+;; Get gptel session buffer
+(unless gptel-buffer
+  (setq gptel-buffer (or
+					  (find-buffer-with-gptel-mode)
+					  (gptel (format "*%s*" (gptel-backend-name gptel-backend))))))
+
+(gptel-context-add-file buffer-file-name)
+;; Insert new prompt into gptel session buffer
+(with-current-buffer gptel-buffer
+  (goto-char (point-max))
+  (insert prompt)
+  (gptel-send))
+(unless (get-buffer-window gptel-buffer)
+  (display-buffer gptel-buffer gptel-display-buffer-action))) ;; TODO remove the file from context afterward
+
+(defun ysd-gptel-code-at-point (prompt)
+  (interactive (list (read-string "Ask: ")))
+	(insert "<<USER CURSOR HERE>>")
+	(gptel-context--add-region (current-buffer) (point-min) (point-max))
+	(gptel-request prompt
+	  :stream t
+	  :system "You are a coding assistant inside Emacs. Respond only with code that will be inserted inside the provided text file at the location `<<USER CURSOR HERE>>`. Indent the code properly to be inserted at that point.")
+	(delete-backward-char (length "<<USER CURSOR HERE>>"))
+	(gptel-context-remove-all))
+
+
+(defun ysd-gptel-ask-file ()
+  (interactive)
+  (gptel-add-file (buffer-file-name)))
+
+;; Stolen and stripped from gptel--infix-provider in gptel-transient.el
+(defun ysd-gptel-choose-model ()
+  (interactive)
+  (cl-loop
+   for (name . backend) in gptel--known-backends
+   nconc (cl-loop for model in (gptel-backend-models backend)
+				  collect (list (concat name ":" (gptel--model-name model))
+								backend model))
+   into models-alist
+   with completion-extra-properties =
+   `(:annotation-function
+	 ,(lambda (comp)
+		(let* ((model (nth 2 (assoc comp models-alist)))
+			   (desc (get model :description))
+			   (caps (get model :capabilities))
+			   (context (get model :context-window))
+			   (input-cost (get model :input-cost))
+			   (output-cost (get model :output-cost))
+			   (cutoff (get model :cutoff-date)))
+		  (when (or context input-cost output-cost)
+			(concat
+			 " " (propertize " " 'display `(space :align-to 34))
+			 (when context (format "%5dk" context))
+			 " " (propertize " " 'display `(space :align-to 42))
+			 (when input-cost (format "$%5.2f in" input-cost))
+			 (if (and input-cost output-cost) "," " ")
+			 " " (propertize " " 'display `(space :align-to 53))
+			 (when output-cost (format "$%6.2f out" output-cost)))))))
+   finally return
+   (cdr (assoc (completing-read "Model:" models-alist nil t nil nil
+								(concat (gptel-backend-name gptel-backend) ":"
+										(gptel--model-name gptel-model)))
+			   models-alist))))
+
+;; Stolen from gptel-menu in gptel-transient.el
+(defun ysd-gptel-choose-session ()
+  (interactive)
+  (read-buffer
+   "GPTel Session:" (generate-new-buffer-name
+					 (concat "*" (gptel-backend-name gptel-backend) "*"))
+   nil (lambda (buf-name)
+		 (if (consp buf-name) (setq buf-name (car buf-name)))
+		 (let ((buf (get-buffer buf-name)))
+		   (and (buffer-local-value 'gptel-mode buf)
+				(not (eq (current-buffer) buf)))))))
+
+(transient-define-prefix ysd-gptel-menu ()
+  [["Setup"
+	("m"
+	 "Model"
+	 (lambda ()
+	   (interactive)
+	   (let ((model (ysd-gptel-choose-model)))
+		 (setq gptel-model (cadr model)
+			   gptel-backend (car model)))))
+	("s" "GPTel Session"
+	 (lambda ()
+	   (interactive)
+	   (setq ysd-gptel-session-buffer (ysd-gptel-choose-session))))]
+   ["Context"
+	("f" "Add File" (lambda () (interactive) (call-interactively #'gptel-add-file)))
+	("b" "Add Buffer" (lambda () (interactive) (gptel-add '(4))))
+	("C" "Clear context" gptel-context-remove-all)]
+   ["Invoke"
+	("p" "Insert code at point" ysd-gptel-code-at-point)
+	("c" "Open Chat" (lambda () (interactive) (gptel ysd-gptel-session-buffer nil nil t)))
+	("e" "Edit code" ysd-gptel-edit-file)]])
+
+(ryo-modal-key "!" 'ysd-gptel-menu)
 
 (setq org-fold-core-style 'overlays) ;; Workaround to folding sometimes being broken
 
