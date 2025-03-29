@@ -163,6 +163,7 @@ to move before/after whitespace."
  ("SPC" set-mark-command))
 
 (global-set-key (kbd "C-<tab>") 'other-window) ;; TODO Adapt for terminal interface
+(global-set-key (kbd "C-y") 'counsel-yank-pop)
 
 (setq ryo-excluded-modes
   '(eshell-mode dired-mode treemacs-mode vterm-mode inferior-python-mode ediff-mode))
@@ -467,15 +468,19 @@ to move before/after whitespace."
 (keymap-set dired-mode-map "m" 'dired-do-rename)
 (keymap-set dired-mode-map "c" 'dired-do-copy)
 
+;; AI generated
 (defun get-random-banner ()
-  "Get random banner from startup-banners"
-  (let ((startup-banners-dir (locate-user-emacs-file "startup-banners")))
-	(if (file-directory-p startup-banners-dir)
-		(let ((files (cl-remove-if-not (lambda (file) (string= (file-name-extension file) "txt"))
-										   (directory-files startup-banners-dir))))
-		  (concat (file-name-as-directory startup-banners-dir) (nth (random (length files)) files)))
-	  (message "Startup banners dir not found")
-	  'logo)))
+  "Generate a random banner using figlet with a random font from marked_fonts.txt"
+  (let* ((startup-banners-dir (locate-user-emacs-file "startup-banners"))
+		 (figlet-path (concat (file-name-as-directory startup-banners-dir) "figlet"))
+		 (fonts-dir (concat (file-name-as-directory startup-banners-dir) "fonts/"))
+		 (fonts-file (concat (file-name-as-directory startup-banners-dir) "marked_fonts.txt"))
+		 (fonts-list (with-temp-buffer
+					   (insert-file-contents fonts-file)
+					   (split-string (buffer-string) "\n" t)))
+		 (random-font (nth (random (length fonts-list)) fonts-list))
+		 (banner-text (shell-command-to-string (format "%s -d %s -f \"%s\" \"Emacs\"" figlet-path fonts-dir random-font))))
+	banner-text))
 
 (when (display-graphic-p)
   (ysd-require 'all-the-icons))
@@ -499,7 +504,7 @@ to move before/after whitespace."
   (setq dashboard-projects-backend 'projectile
 		initial-buffer-choice (lambda () (get-buffer-create dashboard-buffer-name)) ;; Shows dashboard even if launched with emacsclient instead of emacs
 		dashboard-banner-logo-title "Yasper's Emacs"
-		dashboard-startup-banner (get-random-banner)
+		dashboard-startup-banner (make-temp-file "emacs-banner" nil ".txt" (get-random-banner))
 		dashboard-center-content t
 		dashboard-set-file-icons t
 		dashboard-projects-show-base t
@@ -511,9 +516,9 @@ to move before/after whitespace."
 						  (recents . 5)))
   (dashboard-setup-startup-hook))
 
-(add-hook 'dashboard-before-initialize-hook
-		  (lambda()
-			(setq dashboard-startup-banner (get-random-banner))))
+;; (add-hook 'dashboard-before-initialize-hook
+;; 		  (lambda()
+;; 			(setq dashboard-startup-banner (get-random-banner))))
 
 (add-hook 'dashboard-mode-hook
 		  (lambda () (setq-local show-trailing-whitespace nil))) ;; Ruins ASCII art
@@ -617,6 +622,14 @@ to move before/after whitespace."
 (add-hook 'c++-mode-hook 'setup-c++-mode)
 (add-hook 'c-mode-hook 'setup-c++-mode)
 
+(ysd-require 'rustic)
+(setq rustic-lsp-client 'eglot
+	  rustic-analyzer-command '("~/.cargo/bin/rust-analyzer"))
+(defun ysd-setup-rustic ()
+  (flymake-mode -1))
+
+(add-hook 'rustic-mode 'ysd-setup-rustic)
+
 (ysd-require 'lsp-pyright)
 
 (defun setup-python-mode ()
@@ -642,7 +655,8 @@ to move before/after whitespace."
 (push 'magit-status-mode ryo-excluded-modes)
 
 (ysd-require 'gptel)
-(require 'gptel-context)
+
+(defvar ysd-gptel-session-buffer nil)
 
 (setq gptel--known-backends nil)
 
@@ -677,8 +691,9 @@ to move before/after whitespace."
 	  gptel-expert-commands t
 	  gptel-use-context 'user)
 
-(add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
-(add-hook 'gptel-post-response-functions 'gptel-end-of-response)
+(add-hook 'gptel-post-stream-hook (lambda ()
+									(when gptel-mode
+									  (goto-char (point-max)))))
 
 (setq-default markdown-hide-markup t ;; Hides text decoration in gptel buffer
 			  markdown-fontify-code-blocks-natively t)
@@ -689,72 +704,60 @@ to move before/after whitespace."
   (display-line-numbers-mode 0))
 (add-hook 'gptel-mode-hook 'setup-gptel-mode)
 
-(defun ysd-gptel-context-remove (path)
-  (interactive (list (completing-read "Remove context: " gptel-context--alist)))
-  (setq gptel-context--alist (cl-remove (list path) gptel-context--alist :test #'equal)))
-
-(defun ysd-merge-conflict-buffers (old new)
-  "Generate a Git-style merge conflict comparison between OLD and NEW, and output to OUTPUT-BUF."
-  (interactive "bOld Buffer: \nbNew Buffer: ")
-  (let ((file1 (diff-file-local-copy (get-buffer old)))
-		(file2 (diff-file-local-copy (get-buffer new))))
-	(shell-command (format "diff3 -m %s %s %s" file2 file1 file2) (get-buffer-create output-buf))))
-
-(defun find-buffer-with-gptel-mode ()
-  "Find and return the first buffer where `gptel-mode` is enabled.
-If no such buffer is found, return nil."
-  (catch 'found
-	(dolist (buffer (buffer-list))
-	  (with-current-buffer buffer
-		(when gptel-mode
-		  (throw 'found buffer))))))
-
-(defun extract-code-block-backward ()
-  "Extracts text between two lines containing \`\`\`"
+(defun ysd-gptel-edit-files-from-chat ()
+  "Iterates through EDIT blocks in current buffer and
+edits those buffers"
   (interactive)
-  (let (start-pos end-pos)
-	(end-of-buffer)
-	;; Find the first line with ```
-	(if (re-search-backward "^```" nil t)
-		(progn
-		  (previous-line)
-		  (setq end-pos (line-end-position))
-		  ;; Find the second line with ```
-		  (if (re-search-backward "^```" nil t)
-			  (progn
-				(next-line)
-				(setq start-pos (line-beginning-position))
-				;; Extract the content between the two lines
-				(list start-pos end-pos))
-			(message "No second line with ``` found.")))
-		  (message "No line with ``` found."))))
+  (save-excursion
+	(goto-char (point-max))
+	(text-property-search-backward 'gptel 'response #'eq)
+	(while (re-search-forward "EDIT \\(.*?\\)\n```\\(.*?\\)\n<<<<<\\([be]?\\)\n\\(\\(?:.*\n\\)*?.*\\)\n=====\n\\(\\(?:.*\n\\)*?.*\\)\n>>>>>\n```" nil t)
+	  (let* ((filename (match-string 1))
+			 (code-lang (match-string 2))
+			 (begin-or-end (match-string 3))
+			 (old-code (match-string 4))
+			 (new-code (match-string 5))
+			 (code-buffer (get-file-buffer filename))
+			 (edit-block (cons (match-beginning 0)(match-end 0)))
+			 (highlight
+			  (make-overlay (match-beginning 0) (match-end 1)))
+			 edited)
+		(when code-buffer
+		  (overlay-put highlight 'face 'region)
+		  (with-current-buffer code-buffer
+			(goto-char (point-min))
+			(if (search-forward old-code nil t)
+				(let ((start (match-beginning 0))
+					  (end (match-end 0)))
+				  (when (y-or-n-p "Edit?")
+					(delete-region start end)
+					(goto-char start)
+					(insert new-code)
+					(setq edited t)))
+			  (message "Failed an edit: Couldn't find match in file")))
+		  (delete-overlay highlight))
+		(goto-char (car edit-block))
+		(delete-region (car edit-block) (cdr edit-block))
+		(if edited
+			(insert (format "Edited %s\n" filename))
+		  (insert (format "Canceled edit of %s\n" filename)))
+		(insert (format "```%s\n%s\n```" code-lang new-code))))))
 
-(defun ysd-merge-region-and-gptel-code-block (beg end)
-  "Merge the current region with the most recent gptel code block, and start smerge-mode"
-  (interactive "r")
-  (when (not (use-region-p))
-	(setq beg (point-min)
-		  end (point-max)))
-  (let ((old-file (make-temp-file "buffer-contents-"))
-		(new-file (make-temp-file "buffer-contents-")))
+(keymap-set gptel-mode-map "C-e" 'ysd-gptel-edit-files-from-chat)
 
-	(write-region beg end old-file)
-	(with-current-buffer (find-buffer-with-gptel-mode)
-	  (apply 'write-region (append (extract-code-block-backward) (list new-file)))) ;; rewrite this line
-	(if (use-region-p)
-		(delete-region (region-beginning) (region-end))
-	  (erase-buffer))
-	(shell-command (format "diff3 -m %s %s %s" new-file old-file new-file) (current-buffer)))
-  (smerge-mode))
-
-(dolist (pair
-  '(("k" . smerge-next)
-	("i" . smerge-prev)
-	("a" . smerge-keep-upper)
-	("b" . smerge-keep-lower)
-	("B" . smerge-keep-all)
-	("q" . smerge-mode)))
-  (keymap-set smerge-mode-map (car pair) (cdr pair)))
+(setq ysd-gptel-edit-system-prompt
+	  "You have the ability to make edits to files that the user provides as context.
+To edit the file, write \"EDIT filename\" where filename is the file, followed by
+a diff code block that looks like this:
+```
+<<<<<
+<old code>
+=====
+<new code>
+>>>>>
+```
+To make multiple edits, make separate code blocks with
+their own \"EDIT filename\" header.")
 
 (defun ysd-gptel-ask-file (prompt &optional region-text)
   (interactive (list (read-string "Ask: ")
@@ -768,27 +771,29 @@ If no such buffer is found, return nil."
 	(goto-char (point-max))
 	(insert prompt)
 
-	(let ((gptel-context-wrap-function
+	(let ((gptel--system-message
+		   (concat gptel--system-message ysd-gptel-edit-system-prompt))
+		  (gptel-context-wrap-function
 		   (if region-text
 			   (lambda (message contexts)
 				 (concat
 				  (gptel-context--wrap-default message contexts)
 				  "The following text is highlighted:\n"
 				  region-text))
-			 gptel-context--wrap-default)))
+			 #'gptel-context--wrap-default)))
 	  (gptel-send)))
   (gptel-context-remove)
   (unless (get-buffer-window ysd-gptel-session-buffer)
-	  (display-buffer ysd-gptel-session-buffer gptel-display-buffer-action)))
+	(display-buffer ysd-gptel-session-buffer gptel-display-buffer-action)))
 
 (defun ysd-gptel-code-at-point (prompt)
   (interactive (list (read-string "Ask: ")))
-  (insert "<<USER CURSOR HERE>>")
+  (insert "{{USER CURSOR HERE}}")
   (gptel-context--add-region (current-buffer) (point-min) (point-max))
   (gptel-request prompt
 	:stream t
-	:system "You are a coding assistant inside Emacs. Respond only with code that will be inserted inside the provided text file at the location `<<USER CURSOR HERE>>`. Indent the code properly to be inserted at that point.")
-  (delete-backward-char (length "<<USER CURSOR HERE>>"))
+	:system "You are a coding assistant inside Emacs. Respond only with code that will be inserted inside the provided text file at the location `{{USER CURSOR HERE}}`. Indent and format the code properly to be inserted at that point.")
+  (delete-backward-char (length "{{USER CURSOR HERE}}"))
   (gptel-context-remove))
 
 ;; Stolen and stripped from gptel--infix-provider in gptel-transient.el
@@ -853,12 +858,12 @@ If no such buffer is found, return nil."
    ["Context"
 	("f" "Add File" gptel-add-file)
 	("b" "Add Buffer" (lambda () (interactive) (gptel-add '(4))))
-	("r" "Context at point" gptel-add)
+	("a" "Add context at point" gptel-add)
 	("C" "Clear context" gptel-context-remove-all)]
    ["Invoke"
 	("p" "Insert code at point" ysd-gptel-code-at-point)
 	("c" "Open Chat" (lambda () (interactive) (gptel ysd-gptel-session-buffer nil nil t)))
-	("a" "Ask about file" ysd-gptel-ask-file)]])
+	("q" "Ask about file" ysd-gptel-ask-file)]])
 
 (ryo-modal-key "!" 'ysd-gptel-menu)
 
