@@ -617,6 +617,7 @@ Use projectile to manage projects
 ** Dired
 
 #+begin_src emacs-lisp
+  (require 'dired)
   (add-hook 'dired-mode-hook #'dired-hide-details-mode)
   (keymap-set dired-mode-map "i" 'dired-previous-line)
   (keymap-set dired-mode-map "k" 'dired-next-line)
@@ -901,7 +902,7 @@ Use GPTel
 	:key groq-api-key ;; Assumes variable has been set by env.el
 	:models '(llama-3.3-70b-versatile
 			  llama-3.3-8b-instant
-			  qwen-2.5-coder-32b
+			  (qwen-2.5-coder-32b :capabilities (tool))
 			  deepseek-r1-distill-llama-70b
 			  qwen-qwq-32b))
 
@@ -928,7 +929,7 @@ Use GPTel
   (add-hook 'gptel-post-stream-hook (lambda ()
 									  (when gptel-mode
 										(goto-char (point-max)))))
-  
+
   (setq-default markdown-hide-markup t ;; Hides text decoration in gptel buffer
 				markdown-fontify-code-blocks-natively t)
 
