@@ -13,16 +13,16 @@
   :key groq-api-key ;; Assumes variable has been set by env.el
   :models '(llama-3.3-70b-versatile
 			llama-3.3-8b-instant
-			(qwen-2.5-coder-32b :capabilities (tool))
 			deepseek-r1-distill-llama-70b
-			qwen-qwq-32b))
+			(qwen-qwq-32b :capabilities (tool))))
 
 (gptel-make-openai "OpenRouter"
   :host "openrouter.ai"
   :endpoint "/api/v1/chat/completions"
   :stream t
   :key openrouter-api-key ;; Assumes variable has been set by env.el
-  :models '(google/gemini-2.0-flash-001
+  :models '((google/gemini-2.0-flash-001 :capabilities (tool))
+			(openai/gpt-4.1-mini :capabilities (tool))
 			deepseek/deepseek-r1:free
 			qwen/qwen-2.5-coder-32b-instruct
 			anthropic/claude-3.7-sonnet:beta
@@ -35,7 +35,9 @@
 	  gptel-model 'qwen/qwen-2.5-coder-32b-instruct
 	  gptel-use-header-line nil
 	  gptel-expert-commands t
-	  gptel-use-context 'user)
+	  gptel-use-context 'user
+	  gptel-confirm-tool-calls t
+	  gptel-include-tool-results t)
 
 (add-hook 'gptel-post-stream-hook (lambda ()
 									(when gptel-mode
@@ -49,6 +51,32 @@
   (visual-line-mode 1)
   (display-line-numbers-mode 0))
 (add-hook 'gptel-mode-hook 'setup-gptel-mode)
+
+;; Tools
+(gptel-make-tool
+ :name "edit_file"
+ :function (lambda (filename old-text new-text)
+			 (find-file (expand-file-name filename))
+			 (save-excursion
+			   (goto-char (point-min))
+			   (if (search-forward old-text nil t)
+				   (let ((start (match-beginning 0))
+						 (end (match-end 0)))
+					 (delete-region start end)
+					 (goto-char start)
+					 (insert new-text))
+				 (message "Failed an edit: Couldn't find match in file"))))
+ :description "edit a file by replacing a segment of text"
+ :args (list '(:name "filename"
+               :type string
+               :description "name of the file to edit")
+			 '(:name "old_text"
+			   :type string
+			   :description "Existing text to be replaced (at least 1 full line)")
+			 '(:name "new_text"
+			   :type string
+			   :description "New text to replace old_text"))
+ :category "editing")
 
 ;; Automatic file editing
 (defun ysd-gptel-edit-files-from-chat ()
