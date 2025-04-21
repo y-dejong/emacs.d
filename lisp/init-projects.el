@@ -7,11 +7,4 @@
 (projectile-mode 1)
 (counsel-projectile-mode 1)
 
-(ysd-require 'treemacs)
-(ysd-require 'treemacs-projectile)
-(define-key treemacs-mode-map (kbd "i") 'treemacs-previous-line)
-(define-key treemacs-mode-map (kbd "k") 'treemacs-next-line)
-
-(global-set-key (kbd "C-e") 'treemacs)
-
 (provide 'init-projects)
