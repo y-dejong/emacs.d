@@ -24,14 +24,11 @@
 	  ryo-modal-cursor-type '(bar . 2)
 	  ryo-modal-cursor-color (catppuccin-get-color 'text))
 
-(global-display-line-numbers-mode 1)
-
 (dolist (mode '(org-mode-hook
 				fundamental-mode-hook
 				help-mode-hook))
 
   (add-hook mode (lambda ()
-				   (display-line-numbers-mode 0)
 				   (setq truncate-lines nil)
 				   (visual-line-mode 1))))
 

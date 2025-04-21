@@ -48,8 +48,7 @@
 
 (keymap-set gptel-mode-map "C-<return>" 'gptel-send)
 (defun setup-gptel-mode ()
-  (visual-line-mode 1)
-  (display-line-numbers-mode 0))
+  (visual-line-mode 1))
 (add-hook 'gptel-mode-hook 'setup-gptel-mode)
 
 ;; Tools

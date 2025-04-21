@@ -1,7 +1,8 @@
 (ysd-require 'which-key)
 (which-key-setup-side-window-right)
 (setq which-key-idle-delay 0.4
-	  which-key-use-C-h-commands t)
+	  which-key-use-C-h-commands t
+	  which-key-side-window-max-width 0.4) ;; Workaround because of error if descriptions are too long (?)
 
 (defun ysd-which-key-show-top-level-excluding-ryo ()
   (interactive)

@@ -42,4 +42,10 @@
 	(message (concat "treesit-fold not installed, you should git clone it into " (locate-user-emacs-file "site-lisp/treesit-fold")))
   (treesit-fold-setup))
 
+;; Function common to all programming modes
+(defun ysd-setup-prog-modes (&optional window)
+  (display-line-numbers-mode 1))
+
+(add-hook 'prog-mode-hook 'ysd-setup-prog-modes)
+
 (provide 'init-programming)
