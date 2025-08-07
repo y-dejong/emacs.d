@@ -24,9 +24,9 @@
   :models '((google/gemini-2.0-flash-001 :capabilities (tool))
 			(openai/gpt-4.1-mini :capabilities (tool))
 			deepseek/deepseek-r1:free
-			qwen/qwen-2.5-coder-32b-instruct
-			anthropic/claude-3.7-sonnet:beta
-			qwen/qwq-32b:free))
+			qwen/qwen3-32b
+			qwen/qwen3-235b-a22b
+			anthropic/claude-3.7-sonnet:beta))
 
 (push (cons 'markdown-mode "## Chatty:\n") gptel-response-prefix-alist)
 (push (cons 'markdown-mode "## User:\n") gptel-prompt-prefix-alist)

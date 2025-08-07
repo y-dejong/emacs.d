@@ -37,6 +37,7 @@
  line-number-mode t
  column-number-mode t
  mouse-wheel-progressive-speed nil
+ pixel-scroll-precision-mode t
  truncate-lines t
  show-trailing-whitespace t
  create-lockfiles nil
@@ -57,3 +58,4 @@
 
 (setq custom-file (locate-user-emacs-file "custom.el"))
 (if (file-exists-p custom-file) (load custom-file))
+(put 'upcase-region 'disabled nil)

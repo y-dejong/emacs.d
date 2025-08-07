@@ -6,4 +6,6 @@
 (define-key vterm-mode-map (kbd "C-b") nil)
 (define-key vterm-mode-map (kbd "C-c C-b") 'vterm--self-insert)
 
+(keymap-global-set "C-t" 'vterm-other-window)
+
 (provide 'init-terminal)
